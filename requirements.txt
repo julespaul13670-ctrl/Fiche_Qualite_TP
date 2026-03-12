@@ -1,6 +1,7 @@
 streamlit
 pandas
 openpyxl
-fpdf
+fpdf2
 gspread
 google-auth
+
