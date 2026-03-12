@@ -18,7 +18,7 @@ from email.header import decode_header
 import time
 import gspread
 from google.oauth2.service_account import Credentials
-
+st.set_page_config(page_title="Qualité Exécution VRD", layout="wide")
 @st.cache_data
 def charger_donnees():
     # Lit le fichier Excel déposé sur ton GitHub
@@ -74,48 +74,35 @@ def envoyer_par_email(pdf_bytes, nom_fichier, chantier, ouvrage):
 
 def valider_numero_gsheet(chantier, pref, num):
     try:
-        # 1. Connexion au robot via les Secrets Streamlit
         scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
         client = gspread.authorize(creds)
-        
-        # 2. Ouverture du Google Sheet (Vérifie bien le nom exact de ton fichier)
-        # Remplace "Suivi_Qualite_BTP" par le nom réel de ton Google Sheet si besoin
         spreadsheet = client.open("Suivi_Qualite_BTP")
         sheet = spreadsheet.worksheet("suivi_codes")
         
-        # 3. Récupération des données existantes
-        data = sheet.get_all_records()
-        df_suivi = pd.DataFrame(data)
-        
-        # Nettoyage des colonnes (pour éviter les espaces fantômes)
+        # --- LECTURE BRUTE (Plus fiable que get_all_records) ---
+        data = sheet.get_all_values()
+        if not data:
+            df_suivi = pd.DataFrame(columns=['chantier', 'pref', 'num'])
+        else:
+            df_suivi = pd.DataFrame(data[1:], columns=data[0])
+
+        # Nettoyage : Tout en minuscules pour la comparaison
         df_suivi.columns = [str(c).strip().lower() for c in df_suivi.columns]
 
-        # 2. On définit les noms de colonnes qu'on veut utiliser
-        col_chantier = 'chantier'
-        col_pref = 'pref'
-        col_num = 'num'
-        
-        # 3. On vérifie si 'chantier' existe dans les noms nettoyés
-        if col_chantier not in df_suivi.columns:
-            st.error(f"Colonnes détectées par Python : {list(df_suivi.columns)}")
-            st.stop() # Arrête l'exécution pour voir le message
-
-        # 4. Recherche si le chantier et le préfixe existent déjà
-        filtre = (df_suivi['Chantier'].astype(str) == str(chantier)) & (df_suivi['Pref'].astype(str) == str(pref))
+        # Comparaison (On met tout en minuscules et texte)
+        filtre = (df_suivi['chantier'].astype(str).str.strip().str.lower() == str(chantier).strip().lower()) & \
+                 (df_suivi['pref'].astype(str).str.strip().str.lower() == str(pref).strip().lower())
         
         if filtre.any():
-            # On trouve la ligne (index pandas + 2 car le Sheet commence à 1 et a une entête)
             index_ligne = df_suivi.index[filtre][0] + 2
-            # On met à jour la colonne 3 (Num)
             sheet.update_cell(index_ligne, 3, int(num))
         else:
-            # On ajoute une nouvelle ligne à la fin du tableau
             sheet.append_row([str(chantier), str(pref), int(num)])
             
     except Exception as e:
-        st.error(f"Erreur avec Google Sheets : {e}")
-
+        st.error(f"Erreur écriture GSheet : {e}")
+        
 def recuperer_dernier_numero_gsheet(chantier, pref):
     try:
         scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -123,17 +110,25 @@ def recuperer_dernier_numero_gsheet(chantier, pref):
         client = gspread.authorize(creds)
         spreadsheet = client.open("Suivi_Qualite_BTP")
         sheet = spreadsheet.worksheet("suivi_codes")
-        data = sheet.get_all_records()
-        df_suivi = pd.DataFrame(data)
         
-        if not df_suivi.empty:
-            df_suivi.columns = df_suivi.columns.str.strip()
-            filtre = (df_suivi['Chantier'].astype(str) == str(chantier)) & (df_suivi['Pref'].astype(str) == str(pref))
-            if filtre.any():
-                return int(df_suivi.loc[filtre, 'Num'].max())
-        return 0 # Si chantier inconnu, on commence à 0
-    except Exception:
+        data = sheet.get_all_values()
+        if len(data) <= 1:
+            return 0
+            
+        df_suivi = pd.DataFrame(data[1:], columns=data[0])
+        df_suivi.columns = [str(c).strip().lower() for c in df_suivi.columns]
+        
+        filtre = (df_suivi['chantier'].astype(str).str.strip().str.lower() == str(chantier).strip().lower()) & \
+                 (df_suivi['pref'].astype(str).str.strip().str.lower() == str(pref).strip().lower())
+        
+        if filtre.any():
+            # On transforme la colonne num en nombres réels pour trouver le max
+            nums = pd.to_numeric(df_suivi.loc[filtre, 'num'], errors='coerce').fillna(0)
+            return int(nums.max())
         return 0
+    except Exception as e:
+        return 0
+        
 
         
 class FicheQualite(FPDF):
@@ -161,8 +156,7 @@ class FicheQualite(FPDF):
         self.set_font('Arial', 'I', 8)
         self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
 
-# --- 1. CONFIGURATION ---
-    st.set_page_config(page_title="Qualité Exécution VRD", layout="wide")
+
 # --- 2. CSS "FORCE BRUTE" POUR CARTES GÉANTES ---
 st.markdown("""
     <style>
@@ -677,5 +671,6 @@ elif st.session_state.page == "parametres":
             else:
 
                 st.error("Les mots de passe ne correspondent pas ou sont trop courts.")
+
 
 
