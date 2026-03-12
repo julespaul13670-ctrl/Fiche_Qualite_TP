@@ -160,10 +160,13 @@ class FicheQualite(FPDF):
 # --- 2. CSS "FORCE BRUTE" POUR CARTES GÉANTES ---
 st.markdown("""
     <style>
-    /* On cible les boutons de la page d'accueil via leur clé */
+    /* 1. FORCE LA COULEUR DES EMOJIS (Correction Mobile) */
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap');
+
     div.stButton > button[key^="home_"] {
+        font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif !important;
         width: 100% !important; 
-        min-height: 550px !important; /* HAUTEUR GÉANTE */
+        min-height: 550px !important; 
         background-color: white !important;
         border: 4px solid #e0e0e0 !important;
         border-radius: 35px !important;
@@ -173,26 +176,30 @@ st.markdown("""
         flex-direction: column !important;
         align-items: center !important;
         justify-content: center !important;
-        
     }
 
-    /* On cible le texte à l'intérieur du bouton */
-    div.stButton > button[key^="home_"] p {
-        font-size: 50px !important;    /* Ajuste cette valeur pour la taille de l'émoji */
-        line-height: 1.5 !important;   /* Espace entre l'émoji et le texte */
-        text-align: center !important;
-    }
-
-    /* Si tu veux que le texte soit un peu plus petit que l'émoji */
+    /* 2. CIBLE L'EMOJI ET LE TEXTE */
+    div.stButton > button[key^="home_"] p, 
     div.stButton > button[key^="home_"] span {
-        font-size: 35px !important;    /* Taille du texte sous l'émoji */
-        font-weight: bold !important;
-    }
-    span, button, p, div {
         font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif !important;
+        text-rendering: optimizeLegibility !important;
+        -webkit-font-smoothing: antialiased !important;
     }
 
-    /* Effet au survol */
+    div.stButton > button[key^="home_"] p {
+        font-size: 80px !important;    /* Taille de l'émoji boostée */
+        line-height: 1.2 !important;
+        text-align: center !important;
+        margin-bottom: 20px !important;
+    }
+
+    div.stButton > button[key^="home_"] span {
+        font-size: 35px !important;    /* Taille du texte */
+        font-weight: bold !important;
+        color: #31333F !important;     /* Force le texte en gris foncé/noir */
+    }
+
+    /* 3. EFFET AU SURVOL */
     div.stButton > button[key^="home_"]:hover {
         border-color: #3498db !important;
         transform: translateY(-15px) !important;
@@ -675,6 +682,7 @@ elif st.session_state.page == "parametres":
             else:
 
                 st.error("Les mots de passe ne correspondent pas ou sont trop courts.")
+
 
 
 
