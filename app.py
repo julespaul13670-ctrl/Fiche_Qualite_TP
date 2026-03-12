@@ -89,7 +89,17 @@ def valider_numero_gsheet(chantier, pref, num):
         df_suivi = pd.DataFrame(data)
         
         # Nettoyage des colonnes (pour éviter les espaces fantômes)
-        df_suivi.columns = [str(c).strip() for c in df_suivi.columns]
+        df_suivi.columns = [str(c).strip().lower() for c in df_suivi.columns]
+
+        # 2. On définit les noms de colonnes qu'on veut utiliser
+        col_chantier = 'chantier'
+        col_pref = 'pref'
+        col_num = 'num'
+        
+        # 3. On vérifie si 'chantier' existe dans les noms nettoyés
+        if col_chantier not in df_suivi.columns:
+            st.error(f"Colonnes détectées par Python : {list(df_suivi.columns)}")
+            st.stop() # Arrête l'exécution pour voir le message
 
         # 4. Recherche si le chantier et le préfixe existent déjà
         filtre = (df_suivi['Chantier'].astype(str) == str(chantier)) & (df_suivi['Pref'].astype(str) == str(pref))
@@ -667,4 +677,5 @@ elif st.session_state.page == "parametres":
             else:
 
                 st.error("Les mots de passe ne correspondent pas ou sont trop courts.")
+
 
