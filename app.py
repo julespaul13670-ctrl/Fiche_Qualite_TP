@@ -134,13 +134,13 @@ def recuperer_dernier_numero_gsheet(chantier, pref):
 class FicheQualite(FPDF):
     def header(self):
         # 1. LOGO GAUCHE (ex: Logo Entreprise)
-        if os.path.exists("image/logo_gauche.png"):
-            self.image("image/logo_gauche.png", 10, 8, 27) # x=10, y=8, largeur=33
+        if os.path.exists("logo_gauche.png"):
+            self.image("logo_gauche.png", 10, 8, 27) # x=10, y=8, largeur=33
             
         # 2. LOGO DROITE (ex: Logo Client ou Certification)
-        if os.path.exists("image/logo_droit.png"):
+        if os.path.exists("logo_droit.png"):
             # On le place à 10mm du bord droit (210mm largeur A4 - 10mm marge - 33mm image = 167)
-            self.image("image/logo_droit.png", 160, 12, 37) 
+            self.image("logo_droit.png", 160, 12, 37) 
             
         # 3. TITRE CENTRAL
         self.set_font('Arial', 'B', 15)
@@ -173,6 +173,7 @@ st.markdown("""
         flex-direction: column !important;
         align-items: center !important;
         justify-content: center !important;
+        
     }
 
     /* On cible le texte à l'intérieur du bouton */
@@ -186,6 +187,9 @@ st.markdown("""
     div.stButton > button[key^="home_"] span {
         font-size: 35px !important;    /* Taille du texte sous l'émoji */
         font-weight: bold !important;
+    }
+    span, button, p, div {
+        font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif !important;
     }
 
     /* Effet au survol */
@@ -671,6 +675,7 @@ elif st.session_state.page == "parametres":
             else:
 
                 st.error("Les mots de passe ne correspondent pas ou sont trop courts.")
+
 
 
 
