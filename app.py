@@ -16,6 +16,8 @@ import imaplib
 import email
 from email.header import decode_header
 import time
+import gspread
+from google.oauth2.service_account import Credentials
 
 @st.cache_data
 def charger_donnees():
@@ -70,37 +72,60 @@ def envoyer_par_email(pdf_bytes, nom_fichier, chantier, ouvrage):
         return False
     
 
-def valider_numero_csv(chantier, pref, num):
-    file_suivi = "suivi_codes.csv"
-    
-    if os.path.exists(file_suivi):
-        # On lit le fichier (la virgule est confirmée par ton image)
-        df_suivi = pd.read_csv(file_suivi, sep=',', encoding='latin-1')
+def valider_numero_gsheet(chantier, pref, num):
+    try:
+        # 1. Connexion au robot via les Secrets Streamlit
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+        client = gspread.authorize(creds)
         
-        # --- SÉCURITÉ CRITIQUE : Nettoyage des colonnes ---
-        # On enlève les espaces et les caractères invisibles (BOM)
-        df_suivi.columns = df_suivi.columns.str.strip().str.replace('ï»¿', '')
-    else:
-        df_suivi = pd.DataFrame(columns=["Chantier", "Pref", "Num"])
+        # 2. Ouverture du Google Sheet (Vérifie bien le nom exact de ton fichier)
+        # Remplace "Suivi_Qualite_BTP" par le nom réel de ton Google Sheet si besoin
+        spreadsheet = client.open("Suivi_Qualite_BTP")
+        sheet = spreadsheet.worksheet("suivi_codes")
+        
+        # 3. Récupération des données existantes
+        data = sheet.get_all_records()
+        df_suivi = pd.DataFrame(data)
+        
+        # Nettoyage des colonnes (pour éviter les espaces fantômes)
+        df_suivi.columns = df_suivi.columns.str.strip()
 
-    # On vérifie si la colonne existe après nettoyage, sinon on la crée
-    if 'Chantier' not in df_suivi.columns:
-        st.error(f"Colonnes détectées : {list(df_suivi.columns)}") # Pour debug si ça rate
-        df_suivi = pd.DataFrame(columns=["Chantier", "Pref", "Num"])
+        # 4. Recherche si le chantier et le préfixe existent déjà
+        filtre = (df_suivi['Chantier'].astype(str) == str(chantier)) & (df_suivi['Pref'].astype(str) == str(pref))
+        
+        if filtre.any():
+            # On trouve la ligne (index pandas + 2 car le Sheet commence à 1 et a une entête)
+            index_ligne = df_suivi.index[filtre][0] + 2
+            # On met à jour la colonne 3 (Num)
+            sheet.update_cell(index_ligne, 3, int(num))
+        else:
+            # On ajoute une nouvelle ligne à la fin du tableau
+            sheet.append_row([str(chantier), str(pref), int(num)])
+            
+    except Exception as e:
+        st.error(f"Erreur avec Google Sheets : {e}")
 
-    # Comparaison propre
-    filtre = (df_suivi['Chantier'].astype(str) == str(chantier)) & (df_suivi['Pref'].astype(str) == str(pref))
-    
-    if filtre.any():
-        df_suivi.loc[filtre, 'Num'] = int(num)
-    else:
-        nouvelle_ligne = pd.DataFrame([{"Chantier": chantier, "Pref": pref, "Num": int(num)}])
-        df_suivi = pd.concat([df_suivi, nouvelle_ligne], ignore_index=True)
+def recuperer_dernier_numero_gsheet(chantier, pref):
+    try:
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+        client = gspread.authorize(creds)
+        spreadsheet = client.open("Suivi_Qualite_BTP")
+        sheet = spreadsheet.worksheet("suivi_codes")
+        data = sheet.get_all_records()
+        df_suivi = pd.DataFrame(data)
+        
+        if not df_suivi.empty:
+            df_suivi.columns = df_suivi.columns.str.strip()
+            filtre = (df_suivi['Chantier'].astype(str) == str(chantier)) & (df_suivi['Pref'].astype(str) == str(pref))
+            if filtre.any():
+                return int(df_suivi.loc[filtre, 'Num'].max())
+        return 0 # Si chantier inconnu, on commence à 0
+    except Exception:
+        return 0
 
-    # On sauvegarde proprement
-    df_suivi.to_csv(file_suivi, index=False, sep=',', encoding='latin-1')
-
-
+        
 class FicheQualite(FPDF):
     def header(self):
         # 1. LOGO GAUCHE (ex: Logo Entreprise)
@@ -367,22 +392,18 @@ elif st.session_state.page == "Ajouter":
                             pref_final = f"{char_ov}{char_sc}"
 
                         # --- LECTURE SÉCURISÉE DU FICHIER DE SUIVI ---
-                        if os.path.exists("suivi_codes.csv"):
-                            # On force la virgule et l'encodage
-                            df_suivi = pd.read_csv("suivi_codes.csv", sep=',', encoding='latin-1')
-                            # On nettoie les noms de colonnes au cas où (espaces, caractères invisibles)
-                            df_suivi.columns = df_suivi.columns.str.strip().str.replace('ï»¿', '')
+                        # 2. LOGIQUE ID INTELLIGENT
+                        if ouvrage_sel == "Autre":
+                            pref_final = "AU"
                         else:
-                            df_suivi = pd.DataFrame(columns=["Chantier", "Pref", "Num"])
-
-                        # On vérifie si la ligne existe pour calculer le numéro
-                        filtre = (df_suivi['Chantier'].astype(str) == str(chantier)) & (df_suivi['Pref'].astype(str) == str(pref_final))
-
-                        if filtre.any():
-                            nouveau_num = int(df_suivi.loc[filtre, 'Num'].iloc[0]) + 1
-                        else:
-                            nouveau_num = 1
-
+                            char_ov = ouvrage_sel[0].upper()
+                            char_sc = sc_sel[0].upper() if sc_sel != "Standard" else "G"
+                            pref_final = f"{char_ov}{char_sc}"
+                
+                        # --- NOUVELLE LECTURE VIA GOOGLE SHEETS ---
+                        dernier_num = recuperer_dernier_numero_gsheet(chantier, pref_final)
+                        nouveau_num = dernier_num + 1
+                
                         code_fiche = f"{pref_final}-{nouveau_num:03d}"
                         # 3. GÉNÉRATION PDF (TA MISE EN PAGE EXACTE)
                         pdf = FicheQualite()
@@ -454,7 +475,7 @@ elif st.session_state.page == "Ajouter":
                 
                 if st.button("💾 2. Sauvegarder & Envoyer"):
                     if envoyer_par_email(st.session_state.pdf_bytes, st.session_state.nom_fichier, chantier, ouvrage_sel):
-                        valider_numero_csv(chantier, st.session_state.temp_pref, st.session_state.temp_num)
+                        valider_numero_gsheet(chantier, st.session_state.temp_pref, st.session_state.temp_num)
                         st.toast("✅ Rapport envoyé avec succès !")
                         time.sleep(3)
                         st.session_state.pdf_bytes = None
@@ -644,4 +665,5 @@ elif st.session_state.page == "parametres":
                 # Ici tu peux mettre à jour ton système de mot de passe
                 st.success("✅ Mot de passe mis à jour (pense à modifier la valeur dans ton code Python également) !")
             else:
+
                 st.error("Les mots de passe ne correspondent pas ou sont trop courts.")
