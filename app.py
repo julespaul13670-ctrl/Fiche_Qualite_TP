@@ -89,7 +89,7 @@ def valider_numero_gsheet(chantier, pref, num):
         df_suivi = pd.DataFrame(data)
         
         # Nettoyage des colonnes (pour éviter les espaces fantômes)
-        df_suivi.columns = df_suivi.columns.str.strip()
+        df_suivi.columns = [str(c).strip() for c in df_suivi.columns]
 
         # 4. Recherche si le chantier et le préfixe existent déjà
         filtre = (df_suivi['Chantier'].astype(str) == str(chantier)) & (df_suivi['Pref'].astype(str) == str(pref))
@@ -667,3 +667,4 @@ elif st.session_state.page == "parametres":
             else:
 
                 st.error("Les mots de passe ne correspondent pas ou sont trop courts.")
+
