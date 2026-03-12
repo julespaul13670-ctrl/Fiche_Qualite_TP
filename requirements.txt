@@ -1,0 +1,7 @@
+streamlit
+pandas
+fpdf
+gspread
+google-auth
+fpdff2
+oauth2client
