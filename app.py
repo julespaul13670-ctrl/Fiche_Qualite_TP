@@ -468,9 +468,9 @@ elif st.session_state.page == "Ajouter":
                         if photo:
                             pdf.add_page()
                             pdf.set_font("Arial", 'B', 12); pdf.cell(0, 10, "Photo de l'ouvrage :", 0, 1, 'L')
-                            with open("temp_photo.png", "wb") as f:
+                            with open("temp_photo.png","temp_photo.jpeg","temp_photo.jpg", "wb") as f:
                                 f.write(photo.getbuffer())
-                            pdf.image("temp_photo.png", x=10, y=30, w=180)
+                            pdf.image("temp_photo.png","temp_photo.jpeg","temp_photo.jpg", x=10, y=30, w=180)
 
                         # Finalisation et stockage session
                         pdf_data = pdf.output(dest='S')
