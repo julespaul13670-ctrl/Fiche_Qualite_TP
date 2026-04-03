@@ -31,6 +31,42 @@ if "df_config" not in st.session_state:
     except Exception as e:
         st.error(f"Impossible de charger l'Excel : {e}")
         st.session_state.df_config = pd.DataFrame()
+
+def generer_pdf_stock(chantier, df_chantier):
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # En-tête
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, f"ETAT DES STOCKS - {chantier.upper()}", 0, 1, 'C')
+    pdf.set_font("Arial", 'I', 10)
+    pdf.cell(0, 10, f"Edité le : {datetime.now().strftime('%d/%m/%Y à %H:%M')}", 0, 1, 'R')
+    pdf.ln(5)
+
+    # Entête du Tableau
+    pdf.set_fill_color(200, 200, 200)
+    pdf.set_font("Arial", 'B', 10)
+    pdf.cell(45, 10, "Catégorie", 1, 0, 'C', True)
+    pdf.cell(70, 10, "Désignation", 1, 0, 'C', True)
+    pdf.cell(35, 10, "Quantité", 1, 0, 'C', True)
+    pdf.cell(40, 10, "Observations", 1, 1, 'C', True)
+
+    # Contenu du Tableau
+    pdf.set_font("Arial", '', 10)
+    # On trie par catégorie pour que le PDF soit ordonné
+    df_tri = df_chantier.sort_values(by="Categorie")
+    
+    for _, row in df_tri.iterrows():
+        pdf.cell(45, 8, str(row['Categorie']), 1)
+        pdf.cell(70, 8, str(row['Article']), 1)
+        pdf.cell(35, 8, f"{row['Quantite']} {row['Unite']}", 1, 0, 'C')
+        pdf.cell(40, 8, "", 1, 1) # Colonne vide pour notes manuelles
+
+    pdf.ln(10)
+    pdf.set_font("Arial", 'I', 9)
+    pdf.cell(0, 10, "Signature Responsable Chantier :", 0, 1, 'L')
+    
+    return pdf.output(dest='S').encode('latin-1')
     
 def envoyer_par_email(pdf_bytes, nom_fichier, chantier, ouvrage):
     try:
@@ -629,7 +665,7 @@ elif st.session_state.page == "archives":
 elif st.session_state.page == "stock":
     st.title("📦 Gestion des Stocks")
     
-    file_stock = "data_stock.csv"
+    file_stock = "data_stocks.csv"
     file_ch = "data_chantiers.csv"
 
     if os.path.exists(file_stock):
@@ -703,7 +739,25 @@ elif st.session_state.page == "stock":
                                 df_stock = df_stock.drop(idx)
                                 df_stock.to_csv(file_stock, index=False)
                                 st.rerun()
-                                
+                                # --- SECTION EXPORT ---
+            
+            st.divider()
+            st.subheader("🖨️ Export et Impression")
+            
+            if not stock_actuel.empty:
+                if st.button("📄 Générer l'inventaire PDF", use_container_width=True):
+                    pdf_bytes = generer_pdf_stock(chantier_sel, stock_actuel)
+                    
+                    # Bouton de téléchargement qui apparaît après génération
+                    st.download_button(
+                        label="⬇️ Télécharger le PDF pour impression",
+                        data=pdf_bytes,
+                        file_name=f"Stock_{chantier_sel}_{datetime.now().strftime('%Y%m%d')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+            else:
+                st.warning("Impossible de générer un PDF : le stock est vide.")
         
 
 
