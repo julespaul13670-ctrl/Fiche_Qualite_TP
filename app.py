@@ -661,35 +661,46 @@ elif st.session_state.page == "stock":
             st.subheader(f"Inventaire de {chantier_sel}")
 
             # --- AFFICHAGE DES ARTICLES SOUS FORME DE CARTES ---
+            # --- AFFICHAGE DES ARTICLES ---
             stock_actuel = df_stock[df_stock["Chantier"] == chantier_sel]
             
             if stock_actuel.empty:
                 st.info("Aucun article en stock pour ce chantier.")
             else:
-                for idx, row in stock_actuel.iterrows():
-                    # Création d'une "Tuile" pour chaque article
+                # IMPORTANT : On utilise l'index réel du DataFrame original pour les modifications
+                for idx in stock_actuel.index:
+                    row = df_stock.loc[idx]
+                    
                     with st.container(border=True):
-                        col_nom, col_moins, col_qte, col_plus = st.columns([3, 1, 2, 1])
+                        col_nom, col_actions, col_qte, col_del = st.columns([3, 2, 2, 1])
                         
+                        # Colonne 1 : Nom
                         col_nom.write(f"**{row['Article']}**")
-                        col_qte.markdown(f"<h3 style='text-align:center; margin:0;'>{row['Quantite']} <small>{row['Unite']}</small></h3>", unsafe_allow_html=True)
                         
-                        # Bouton MOINS (Consommer)
-                        if col_moins.button("➖", key=f"moins_{idx}"):
+                        # Colonne 2 : Boutons + / -
+                        c_moins, c_plus = col_actions.columns(2)
+                        if c_moins.button("➖", key=f"moins_{idx}"):
                             df_stock.at[idx, "Quantite"] = max(0, row["Quantite"] - 1)
                             df_stock.to_csv(file_stock, index=False)
                             st.rerun()
-                            
-                        # Bouton PLUS (Livraison)
-                        if col_plus.button("➕", key=f"plus_{idx}"):
+                        if c_plus.button("➕", key=f"plus_{idx}"):
                             df_stock.at[idx, "Quantite"] = row["Quantite"] + 1
                             df_stock.to_csv(file_stock, index=False)
                             st.rerun()
-                            
-                        # Option pour retirer manuellement une grosse quantité
-                        with st.expander("Consommation précise"):
-                            val_conso = st.number_input("Quantité consommée", min_value=0, key=f"val_{idx}")
-                            if st.button("Valider conso", key=f"btn_val_{idx}"):
+
+                        # Colonne 3 : Quantité affichée
+                        col_qte.markdown(f"<h3 style='text-align:center; margin:0; color:#3498db;'>{row['Quantite']} <small style='font-size:12px; color:gray;'>{row['Unite']}</small></h3>", unsafe_allow_html=True)
+                        
+                        # Colonne 4 : Suppression (La poubelle)
+                        if col_del.button("🗑️", key=f"del_{idx}", help="Supprimer cet article"):
+                            df_stock = df_stock.drop(idx)
+                            df_stock.to_csv(file_stock, index=False)
+                            st.rerun()
+
+                        # Petit menu déroulant pour les grosses quantités
+                        with st.expander("Saisie précise"):
+                            val_conso = st.number_input("Quantité à retirer", min_value=0, key=f"val_{idx}")
+                            if st.button("Soustraire", key=f"btn_val_{idx}"):
                                 df_stock.at[idx, "Quantite"] = max(0, row["Quantite"] - val_conso)
                                 df_stock.to_csv(file_stock, index=False)
                                 st.rerun()
