@@ -624,99 +624,94 @@ elif st.session_state.page == "archives":
 
 # --- PAGE GESTION DU STOCK ---
 # --- PAGE GESTION DU STOCK (VERSION INTUITIVE) ---
+# --- PAGE GESTION DU STOCK ---
 elif st.session_state.page == "stock":
     st.title("📦 Gestion des Stocks")
     
     file_stock = "data_stock.csv"
-    
-    # 1. Chargement des données
+    file_ch = "data_chantiers.csv"
+
+    # 1. Chargement des données stock
     if os.path.exists(file_stock):
         df_stock = pd.read_csv(file_stock)
     else:
         df_stock = pd.DataFrame(columns=["Chantier", "Article", "Quantite", "Unite"])
 
     # 2. Sélection du chantier
-    file_ch = "data_chantiers.csv"
     if os.path.exists(file_ch):
         liste_chantiers = pd.read_csv(file_ch)["Nom"].tolist()
-        chantier_sel = st.selectbox("📍 Chantier", ["Sélectionner..."] + liste_chantiers)
+        chantier_sel = st.selectbox("📍 Sélectionner le chantier", ["Sélectionner..."] + liste_chantiers)
         
         if chantier_sel != "Sélectionner...":
             st.divider()
             
-            # --- AJOUTER UN NOUVEL ARTICLE ---
+            # --- FORMULAIRE D'AJOUT ---
             with st.expander("➕ Ajouter un nouvel article au stock"):
                 c1, c2, c3 = st.columns([3, 1, 1])
                 nouvel_art = c1.text_input("Nom de l'article (ex: Bordure T2)")
-                qte_init = c2.number_input("Qté", min_value=0, value=0)
+                qte_init = c2.number_input("Qté initiale", min_value=0, value=0)
                 unite_init = c3.selectbox("Unité", ["u", "ml", "m2", "m3", "t"])
                 
-                if st.button("Valider l'ajout"):
-                    nouvelle_ligne = pd.DataFrame([[chantier_sel, nouvel_art, qte_init, unite_init]], 
-                                                columns=["Chantier", "Article", "Quantite", "Unite"])
-                    df_stock = pd.concat([df_stock, nouvelle_ligne], ignore_index=True)
-                    df_stock.to_csv(file_stock, index=False)
-                    st.rerun()
+                if st.button("Enregistrer l'article"):
+                    if nouvel_art:
+                        nouvelle_ligne = pd.DataFrame([[chantier_sel, nouvel_art, qte_init, unite_init]], 
+                                                    columns=["Chantier", "Article", "Quantite", "Unite"])
+                        df_stock = pd.concat([df_stock, nouvelle_ligne], ignore_index=True)
+                        df_stock.to_csv(file_stock, index=False)
+                        st.success("Article ajouté !")
+                        st.rerun()
 
-            st.subheader(f"Inventaire de {chantier_sel}")
+            st.subheader(f"Inventaire actuel : {chantier_sel}")
 
-            # --- AFFICHAGE DES ARTICLES SOUS FORME DE CARTES ---
-            # --- AFFICHAGE DES ARTICLES ---
-            # --- AFFICHAGE DES ARTICLES ---
+            # --- AFFICHAGE DES CARTES (BOUCLE CORRIGÉE) ---
             stock_actuel = df_stock[df_stock["Chantier"] == chantier_sel]
             
             if stock_actuel.empty:
-                st.info("Aucun article en stock pour ce chantier.")
+                st.info("Aucun article enregistré pour ce chantier.")
             else:
-                # On boucle sur l'index REEL du dataframe pour ne pas se tromper de ligne
+                # On utilise .index pour être sûr de modifier la bonne ligne dans le fichier global
                 for idx in stock_actuel.index:
                     row = df_stock.loc[idx]
                     
-                    # On crée un cadre pour chaque article
+                    # Début de la carte article
                     with st.container(border=True):
-                        # Organisation en colonnes : Nom | - | Quantité | + | Poubelle
+                        # On crée 5 colonnes pour tout aligner sur une seule ligne (Top pour mobile)
                         col_nom, col_moins, col_qte, col_plus, col_del = st.columns([3, 1, 2, 1, 1])
                         
-                        # 1. Nom de l'objet
+                        # 1. Nom
                         col_nom.markdown(f"**{row['Article']}**")
                         
-                        # 2. Bouton MOINS
-                        if col_moins.button("➖", key=f"moins_{idx}"):
+                        # 2. Bouton Moins
+                        if col_moins.button("➖", key=f"m_{idx}"):
                             df_stock.at[idx, "Quantite"] = max(0, row["Quantite"] - 1)
                             df_stock.to_csv(file_stock, index=False)
                             st.rerun()
                         
-                        # 3. Affichage Quantité (en gros et bleu)
-                        col_qte.markdown(f"<h3 style='text-align:center; margin:0; color:#3498db;'>{row['Quantite']} <small style='font-size:14px; color:gray;'>{row['Unite']}</small></h3>", unsafe_allow_html=True)
+                        # 3. Chiffre de la quantité
+                        col_qte.markdown(f"<h3 style='text-align:center; margin:0; color:#3498db;'>{row['Quantite']} <small style='font-size:12px; color:gray;'>{row['Unite']}</small></h3>", unsafe_allow_html=True)
                         
-                        # 4. Bouton PLUS
-                        if col_plus.button("➕", key=f"plus_{idx}"):
+                        # 4. Bouton Plus
+                        if col_plus.button("➕", key=f"p_{idx}"):
                             df_stock.at[idx, "Quantite"] = row["Quantite"] + 1
                             df_stock.to_csv(file_stock, index=False)
                             st.rerun()
-
-                        # 5. Bouton SUPPRIMER (Poubelle)
-                        if col_del.button("🗑️", key=f"del_{idx}", help="Supprimer l'article"):
+                        
+                        # 5. Bouton Supprimer (C'est ICI qu'il doit être pour éviter le NameError)
+                        if col_del.button("🗑️", key=f"d_{idx}"):
                             df_stock = df_stock.drop(idx)
                             df_stock.to_csv(file_stock, index=False)
                             st.rerun()
 
-                        # Optionnel : Saisie précise si on consomme beaucoup d'un coup
-                        with st.expander("Consommation précise"):
-                            c_val, c_btn = st.columns([2, 1])
-                            val_conso = c_val.number_input("Qté à retirer", min_value=0, key=f"input_{idx}")
-                            if c_btn.button("Retirer", key=f"btn_conso_{idx}"):
-                                df_stock.at[idx, "Quantite"] = max(0, row["Quantite"] - val_conso)
+                        # Optionnel : Petite zone de saisie pour les grosses quantités
+                        with st.expander("Modifier manuellement"):
+                            val_ajust = st.number_input("Quantité à retirer (ex: 50)", min_value=0, key=f"input_{idx}")
+                            if st.button("Valider retrait", key=f"btn_retrait_{idx}"):
+                                df_stock.at[idx, "Quantite"] = max(0, row["Quantite"] - val_ajust)
                                 df_stock.to_csv(file_stock, index=False)
                                 st.rerun()
-                                
-            if st.button("🗑️ Supprimer l'article", key=f"del_{idx}", help="Supprime définitivement de la liste"):
-                 df_stock = df_stock.drop(idx)
-                 df_stock.to_csv(file_stock, index=False)
-                 st.rerun()
     else:
-        st.warning("Veuillez d'abord configurer vos chantiers dans les Paramètres.")
-
+        st.warning("Ajoutez d'abord des chantiers dans les Paramètres.")
+        
 
 
 # 4. Encore ELIF pour les paramètres
