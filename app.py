@@ -237,6 +237,12 @@ with st.sidebar:
         st.rerun()
 
     st.write("") # Espace
+
+    if st.sidebar.button("📦 Gestion du Stock", use_container_width=True):
+        st.session_state.page = "stock"
+        st.rerun()
+
+    st.write("") # Espace
     st.write("---")
 
     # Bouton Paramètres
@@ -614,6 +620,55 @@ elif st.session_state.page == "archives":
             st.warning("Aucun rapport ne correspond à votre recherche.")
     else:
         st.info("Utilisez le bouton ci-dessus pour charger vos rapports.")
+
+
+# --- PAGE GESTION DU STOCK ---
+elif st.session_state.page == "stock":
+    st.title("📦 Gestion des Stocks par Chantier")
+    
+    file_ch = "data_chantiers.csv"
+    file_stock = "data_stock.csv"
+
+    # Chargement des chantiers existants
+    if os.path.exists(file_ch):
+        df_ch = pd.read_csv(file_ch)
+        liste_chantiers = df_ch["Nom"].tolist()
+        
+        # 1. Sélection du chantier
+        chantier_sel = st.selectbox("📍 Sélectionner le chantier pour le stock", ["Sélectionner..."] + liste_chantiers)
+        
+        if chantier_sel != "Sélectionner...":
+            # 2. Chargement ou création du fichier stock
+            if os.path.exists(file_stock):
+                df_stock = pd.read_csv(file_stock)
+            else:
+                # Structure : Chantier, Article, Quantité, Unité
+                df_stock = pd.DataFrame(columns=["Chantier", "Article", "Quantité", "Unité"])
+
+            # Filtrer le stock pour le chantier sélectionné
+            stock_chantier = df_stock[df_stock["Chantier"] == chantier_sel].copy()
+            
+            st.subheader(f"Inventaire : {chantier_sel}")
+            
+            # 3. Éditeur de données pour modifier les stocks existants ou en ajouter
+            # On utilise un data_editor pour que ce soit ultra simple sur mobile
+            edited_stock = st.data_editor(
+                stock_chantier[["Article", "Quantité", "Unité"]], 
+                num_rows="dynamic", 
+                use_container_width=True,
+                key=f"editor_{chantier_sel}"
+            )
+            
+            if st.button("💾 Sauvegarder l'état du stock"):
+                # On retire l'ancien stock du chantier et on ajoute le nouveau
+                df_restant = df_stock[df_stock["Chantier"] != chantier_sel]
+                edited_stock["Chantier"] = chantier_sel
+                
+                df_final = pd.concat([df_restant, edited_stock], ignore_index=True)
+                df_final.to_csv(file_stock, index=False)
+                st.success(f"✅ Stock mis à jour pour {chantier_sel} !")
+    else:
+        st.error("Aucun chantier configuré. Allez dans Paramètres pour ajouter des chantiers.")
 
 
 # 4. Encore ELIF pour les paramètres
