@@ -623,52 +623,84 @@ elif st.session_state.page == "archives":
 
 
 # --- PAGE GESTION DU STOCK ---
+# --- PAGE GESTION DU STOCK (VERSION INTUITIVE) ---
 elif st.session_state.page == "stock":
-    st.title("📦 Gestion des Stocks par Chantier")
+    st.title("📦 Gestion des Stocks")
     
-    file_ch = "data_chantiers.csv"
     file_stock = "data_stock.csv"
+    
+    # 1. Chargement des données
+    if os.path.exists(file_stock):
+        df_stock = pd.read_csv(file_stock)
+    else:
+        df_stock = pd.DataFrame(columns=["Chantier", "Article", "Quantite", "Unite"])
 
-    # Chargement des chantiers existants
+    # 2. Sélection du chantier
+    file_ch = "data_chantiers.csv"
     if os.path.exists(file_ch):
-        df_ch = pd.read_csv(file_ch)
-        liste_chantiers = df_ch["Nom"].tolist()
-        
-        # 1. Sélection du chantier
-        chantier_sel = st.selectbox("📍 Sélectionner le chantier pour le stock", ["Sélectionner..."] + liste_chantiers)
+        liste_chantiers = pd.read_csv(file_ch)["Nom"].tolist()
+        chantier_sel = st.selectbox("📍 Chantier", ["Sélectionner..."] + liste_chantiers)
         
         if chantier_sel != "Sélectionner...":
-            # 2. Chargement ou création du fichier stock
-            if os.path.exists(file_stock):
-                df_stock = pd.read_csv(file_stock)
-            else:
-                # Structure : Chantier, Article, Quantité, Unité
-                df_stock = pd.DataFrame(columns=["Chantier", "Article", "Quantité", "Unité"])
-
-            # Filtrer le stock pour le chantier sélectionné
-            stock_chantier = df_stock[df_stock["Chantier"] == chantier_sel].copy()
+            st.divider()
             
-            st.subheader(f"Inventaire : {chantier_sel}")
-            
-            # 3. Éditeur de données pour modifier les stocks existants ou en ajouter
-            # On utilise un data_editor pour que ce soit ultra simple sur mobile
-            edited_stock = st.data_editor(
-                stock_chantier[["Article", "Quantité", "Unité"]], 
-                num_rows="dynamic", 
-                use_container_width=True,
-                key=f"editor_{chantier_sel}"
-            )
-            
-            if st.button("💾 Sauvegarder l'état du stock"):
-                # On retire l'ancien stock du chantier et on ajoute le nouveau
-                df_restant = df_stock[df_stock["Chantier"] != chantier_sel]
-                edited_stock["Chantier"] = chantier_sel
+            # --- AJOUTER UN NOUVEL ARTICLE ---
+            with st.expander("➕ Ajouter un nouvel article au stock"):
+                c1, c2, c3 = st.columns([3, 1, 1])
+                nouvel_art = c1.text_input("Nom de l'article (ex: Bordure T2)")
+                qte_init = c2.number_input("Qté", min_value=0, value=0)
+                unite_init = c3.selectbox("Unité", ["u", "ml", "m2", "m3", "t"])
                 
-                df_final = pd.concat([df_restant, edited_stock], ignore_index=True)
-                df_final.to_csv(file_stock, index=False)
-                st.success(f"✅ Stock mis à jour pour {chantier_sel} !")
+                if st.button("Valider l'ajout"):
+                    nouvelle_ligne = pd.DataFrame([[chantier_sel, nouvel_art, qte_init, unite_init]], 
+                                                columns=["Chantier", "Article", "Quantite", "Unite"])
+                    df_stock = pd.concat([df_stock, nouvelle_ligne], ignore_index=True)
+                    df_stock.to_csv(file_stock, index=False)
+                    st.rerun()
+
+            st.subheader(f"Inventaire de {chantier_sel}")
+
+            # --- AFFICHAGE DES ARTICLES SOUS FORME DE CARTES ---
+            stock_actuel = df_stock[df_stock["Chantier"] == chantier_sel]
+            
+            if stock_actuel.empty:
+                st.info("Aucun article en stock pour ce chantier.")
+            else:
+                for idx, row in stock_actuel.iterrows():
+                    # Création d'une "Tuile" pour chaque article
+                    with st.container(border=True):
+                        col_nom, col_moins, col_qte, col_plus = st.columns([3, 1, 2, 1])
+                        
+                        col_nom.write(f"**{row['Article']}**")
+                        col_qte.markdown(f"<h3 style='text-align:center; margin:0;'>{row['Quantite']} <small>{row['Unite']}</small></h3>", unsafe_allow_html=True)
+                        
+                        # Bouton MOINS (Consommer)
+                        if col_moins.button("➖", key=f"moins_{idx}"):
+                            df_stock.at[idx, "Quantite"] = max(0, row["Quantite"] - 1)
+                            df_stock.to_csv(file_stock, index=False)
+                            st.rerun()
+                            
+                        # Bouton PLUS (Livraison)
+                        if col_plus.button("➕", key=f"plus_{idx}"):
+                            df_stock.at[idx, "Quantite"] = row["Quantite"] + 1
+                            df_stock.to_csv(file_stock, index=False)
+                            st.rerun()
+                            
+                        # Option pour retirer manuellement une grosse quantité
+                        with st.expander("Consommation précise"):
+                            val_conso = st.number_input("Quantité consommée", min_value=0, key=f"val_{idx}")
+                            if st.button("Valider conso", key=f"btn_val_{idx}"):
+                                df_stock.at[idx, "Quantite"] = max(0, row["Quantite"] - val_conso)
+                                df_stock.to_csv(file_stock, index=False)
+                                st.rerun()
+            
+            if st.button("🗑️ Supprimer l'article", key=f"del_{idx}", help="Supprime définitivement de la liste"):
+                 df_stock = df_stock.drop(idx)
+                 df_stock.to_csv(file_stock, index=False)
+                 st.rerun()
     else:
-        st.error("Aucun chantier configuré. Allez dans Paramètres pour ajouter des chantiers.")
+        st.warning("Veuillez d'abord configurer vos chantiers dans les Paramètres.")
+
 
 
 # 4. Encore ELIF pour les paramètres
