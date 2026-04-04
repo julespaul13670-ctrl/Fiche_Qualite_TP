@@ -841,9 +841,9 @@ elif st.session_state.page == "parametres":
             sheet_ch.append_row([n_nom, n_resp])
             st.success("Enregistré !"); st.rerun()
     st.table(pd.DataFrame(data_ch)) # Affiche la liste actuelle
-    if st.button("🔄 Forcer la mise à jour des listes"):
-    st.cache_data.clear() # Vide le cache
-    st.rerun()
+        if st.button("🔄 Forcer la mise à jour des listes"):
+        st.cache_data.clear() # Vide le cache
+        st.rerun()
 
     with st.form("ajout_perso", clear_on_submit=True):
         n_p = st.text_input("Nom du contrôleur")
@@ -851,9 +851,9 @@ elif st.session_state.page == "parametres":
             sheet_perso.append_row([n_p])
             st.success("Enregistré !"); st.rerun()
     st.table(pd.DataFrame(data_p))
-    if st.button("🔄 Forcer la mise à jour des listes"):
-    st.cache_data.clear() # Vide le cache
-    st.rerun()
+        if st.button("🔄 Forcer la mise à jour des listes"):
+        st.cache_data.clear() # Vide le cache
+        st.rerun()
 
     with tab3:
         st.subheader("📐 Éditeur de Structure VRD")
