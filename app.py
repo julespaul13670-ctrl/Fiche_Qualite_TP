@@ -752,15 +752,20 @@ elif st.session_state.page == "archives":
 
 # --- PAGE GESTION DU STOCK ---
 elif st.session_state.page == "stock":
-    st.title("📦 Gestion des Stocks")
+    st.title("📦 Gestion des Stocks (Cloud)")
 
-    # Lecture via cache
+    # 1. LECTURE : Utilise le cache (Zéro requête si déjà lu)
     data_stock = lire_onglet_cache("inventaire_stock")
-    df_stock = pd.DataFrame(data_stock) if data_stock else pd.DataFrame(columns=["Chantier", "Categorie", "Article", "Quantite", "Unite"])
-    df_stock['Categorie'] = df_stock['Categorie'].astype(str).str.strip().str.upper()
+    
+    if data_stock:
+        df_stock = pd.DataFrame(data_stock)
+        df_stock['Categorie'] = df_stock['Categorie'].astype(str).str.strip().str.upper()
+    else:
+        df_stock = pd.DataFrame(columns=["Chantier", "Categorie", "Article", "Quantite", "Unite"])
 
-    # Préparation objet pour écriture
-    sheet_stock = obtenir_onglet_ecriture("inventaire_stock")
+    # --- IMPORTANT : ON NE DÉFINIT PAS sheet_stock ICI ---
+    # On le fera uniquement à l'intérieur des boutons if col_valider.button...
+
     if liste_chantiers:
         chantier_sel = st.selectbox("📍 Sélectionner le chantier", ["Sélectionner..."] + liste_chantiers)
         
@@ -817,14 +822,23 @@ elif st.session_state.page == "stock":
                                 )
                                 
                                 if col_valider.button("💾", key=f"save_{idx}"):
-                                    sheet_stock.update_cell(ligne_reelle, 4, int(nvelle_qte))
-                                    st.cache_data.clear()
-                                    st.rerun()
-
+                                    with st.spinner("Mise à jour..."):
+                                        # ON APPELLE L'API UNIQUEMENT MAINTENANT
+                                        sh_ecriture = obtenir_onglet_ecriture("inventaire_stock")
+                                        if sh_ecriture:
+                                            row_gsheet = int(idx) + 2
+                                            sh_ecriture.update_cell(row_gsheet, 4, int(nvelle_qte))
+                                            st.cache_data.clear() # On vide le cache pour la prochaine lecture
+                                            st.rerun()
+                    
                                 if col_poubelle.button("🗑️", key=f"del_{idx}"):
-                                    sheet_stock.delete_rows(ligne_reelle)
-                                    st.cache_data.clear()
-                                    st.rerun()
+                                    with st.spinner("Suppression..."):
+                                        sh_ecriture = obtenir_onglet_ecriture("inventaire_stock")
+                                        if sh_ecriture:
+                                            row_gsheet = int(idx) + 2
+                                            sh_ecriture.delete_rows(row_gsheet)
+                                            st.cache_data.clear()
+                                            st.rerun()
 
             # --- EXPORT PDF ---
             st.divider()
