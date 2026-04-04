@@ -518,11 +518,18 @@ elif st.session_state.page == "Ajouter":
                                     # Photo
                                     if photo:
                                         pdf.add_page()
-                                        pdf.set_font("Arial", 'B', 12); pdf.cell(0, 10, "Photo de l'ouvrage :", 0, 1, 'L')
-                                        with open("temp_photo.png","temp_photo.jpeg","temp_photo.jpg", "wb") as f:
+                                        pdf.set_font("Arial", 'B', 12)
+                                        pdf.cell(0, 10, "Photo de l'ouvrage :", 0, 1, 'L')
+                                        
+                                        # 1. On enregistre sous UN SEUL NOM temporaire (peu importe l'extension)
+                                        nom_temp = "temp_photo_rapport.png"
+                                        
+                                        with open(nom_temp, "wb") as f:
                                             f.write(photo.getbuffer())
-                                        pdf.image("temp_photo.png","temp_photo.jpeg","temp_photo.jpg", x=10, y=30, w=180)
-            
+                                        
+                                        # 2. On insère cette image unique dans le PDF
+                                        # Attention : pdf.image ne prend qu'UN seul nom de fichier en premier argument
+                                        pdf.image(nom_temp, x=10, y=30, w=180)
                                     # Finalisation et stockage session
                                     pdf_data = pdf.output(dest='S')
                                     st.session_state.pdf_bytes = bytes(pdf_data) if not isinstance(pdf_data, str) else pdf_data.encode('latin-1')
