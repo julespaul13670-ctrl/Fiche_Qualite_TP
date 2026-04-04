@@ -332,10 +332,6 @@ if st.session_state.page == "Accueil":
 elif st.session_state.page == "Ajouter":
     st.title("📝 Nouveau Rapport de Contrôle")
 
-    file_ch = "data_chantiers.csv"
-    file_ctrl = "data_controleurs.csv"
-    
-
     if os.path.exists(file_ch) and os.path.exists(file_ctrl):
         df_ch = pd.read_csv(file_ch)
         dict_chantiers = pd.Series(df_ch.Responsable.values, index=df_ch.Nom).to_dict()
