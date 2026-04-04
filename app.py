@@ -365,218 +365,218 @@ elif st.session_state.page == "Ajouter":
                 liste_ouvrages = [ov for ov in df['Ouvrage'].unique() if ov != "_GENERAL" and ov != ""]
                 # ... la suite de ton code continue ici, toujours avec cet alignement
                 
-    else:
-        st.warning("⚠️ Aucun chantier trouvé. Configurez-les dans l'onglet Paramètres.")
-        
-        # On définit une liste vide par défaut pour éviter l'erreur NameError
-        liste_ouvrages = [] 
-        
-        if df is not None and not df.empty:
-            liste_ouvrages = [ov for ov in df['Ouvrage'].unique() if ov != "_GENERAL" and ov != ""]
-        
-        # Maintenant 'liste_ouvrages' existe toujours, même si elle est vide []
-        
-        # 1. Sélection de l'Ouvrage (Regards, Bordures...)
-        # Modifie la création de la liste
-            # --- 1. SÉLECTION DE L'OUVRAGE ---
-        # --- 1. SÉLECTION DE L'OUVRAGE ---
-        liste_ouvrages = [ov for ov in df['Ouvrage'].unique() if ov != "_GENERAL" and ov != ""]
-        liste_ouvrages.append("Autre")
-
-        ouvrage_sel = st.selectbox("🏗️ Ouvrage à contrôler", ["Sélectionner..."] + liste_ouvrages, key="sel_ouv_main")
-
-        if ouvrage_sel != "Sélectionner...":
-            # --- 2. GESTION DU CAS 'AUTRE' VS NORMAL ---
-            if ouvrage_sel == "Autre":
-                nom_ouvrage_libre = st.text_input("📝 Nom de l'ouvrage non prévu", placeholder="Ex: Muret, Escalier...")
-                ouvrage_final_nom = nom_ouvrage_libre if nom_ouvrage_libre else "Autre ouvrage"
-                # On crée un DataFrame vide avec les colonnes du Sheets pour éviter les erreurs NameError
-                df_ouv = pd.DataFrame(columns=df.columns)
-                st.info("💡 Pour cet ouvrage, vous pouvez remplir les contrôles généraux et l'observation ci-dessous.")
             else:
-                df_ouv = df[df['Ouvrage'] == ouvrage_sel]
-                ouvrage_final_nom = ouvrage_sel
-
-            # --- 3. SOUS-CATÉGORIES ---
-            df_scat = df_ouv[df_ouv['Niveau'].isin(['S-Cat', 'Type'])]
-            sc_sel = "Standard" # Valeur par défaut si vide
-            
-            if not df_scat.empty:
-                sc_list = df_scat['Sous-Catégorie / Type'].unique().tolist()
-                sc_sel = st.selectbox("🔍 Sous-catégorie / Modèle", ["Sélectionner..."] + sc_list, key="sel_scat")
-
-                if sc_sel != "Sélectionner...":
-                    df_filtre_sc = df_scat[df_scat['Sous-Catégorie / Type'] == sc_sel]
-                    deja_affiche = []
-
-                    for i, row in df_filtre_sc.iterrows():
-                        question_texte = row['Question ou Option']
-                        if pd.isna(question_texte) or str(question_texte).strip() == "":
-                            continue
-
-                        if row['Niveau'] == 'Type':
-                            if sc_sel not in deja_affiche:
-                                st.radio(f"Configuration {sc_sel}", ["Ligne droite", "Courbe"], key=f"rad_{sc_sel}_{i}")
-                                deja_affiche.append(sc_sel)
-                        else:
-                            st.checkbox(str(question_texte), key=f"chk_{question_texte}")
-
-            # --- 4. QUESTIONS FIXES DE L'OUVRAGE ---
-            df_fixes = df_ouv[df_ouv['Niveau'] == 'Ouvrage']
-            if not df_fixes.empty:
-                st.subheader(f"✅ Points de contrôle {ouvrage_final_nom}")
-                for i, row in df_fixes.iterrows():
-                    st.checkbox(row['Question ou Option'], key=f"chk_{row['Question ou Option']}")
-
-            # --- 5. QUESTIONS GÉNÉRALES ---
-            st.subheader("🌍 Contrôles Généraux")
-            df_gen_data = df[df['Ouvrage'] == '_GENERAL']
-            for i, row in df_gen_data.iterrows():
-                q_txt = str(row['Question ou Option']).strip()
-                st.checkbox(q_txt, key=f"chk_gen_{q_txt}")
-
-            # --- 6. OBSERVATIONS ET PHOTO ---
-            st.divider()
-            commentaire = st.text_area("📝 Observations particulières", key="comm_zone")
-            # --- 6. Capture ou Import Photo ---
-            st.subheader("📸 Justificatif Photo")
-            
-            # file_uploader permet de choisir entre l'appareil photo et la galerie sur mobile
-            photo = st.file_uploader(
-                "Prendre une photo ou choisir une image", 
-                type=['png', 'jpg', 'jpeg'],
-                key=f"upload_{ouvrage_sel}"
-            )
-            if photo:
-                st.image(photo, caption="Aperçu de la photo sélectionnée", width=300)
-                # Stockage en session
-                st.session_state['temp_photo_bytes'] = photo.getvalue()
-
-            # --- 7. BOUTON DE GÉNÉRATION (CONTENU INCHANGÉ) ---
-            if st.button("🚀 1. Générer l'Aperçu", key=f"btn_generer_{ouvrage_sel}"):
-                if not nom_final:
-                    st.error("Indiquez le contrôleur.")
-                else:
-                    try:
-                        # 1. RÉCUPÉRATION DES RÉPONSES
-                        controles = {}
-                        # Questions Ouvrage
-                        for _, row in df_ouv.iterrows():
-                            q_txt = row['Question ou Option']
-                            key_chk = f"chk_{q_txt}"
-                            if key_chk in st.session_state:
-                                controles[q_txt] = (st.session_state[key_chk], row['Catégorie Question'])
-
-                        # Questions Générales
-                        for _, row in df_gen_data.iterrows():
-                            q_txt = str(row['Question ou Option']).strip()
-                            key_gen = f"chk_gen_{q_txt}"
-                            if key_gen in st.session_state:
-                                cat_name = row['Catégorie Question'] if pd.notna(row['Catégorie Question']) else "Général"
-                                controles[q_txt] = (st.session_state[key_gen], cat_name)
-
-                        # 2. LOGIQUE ID INTELLIGENT
-                        if ouvrage_sel == "Autre":
-                            pref_final = "AU"
-                        else:
-                            char_ov = ouvrage_sel[0].upper()
-                            char_sc = sc_sel[0].upper() if sc_sel != "Standard" else "G"
-                            pref_final = f"{char_ov}{char_sc}"
-
-                        # --- LECTURE SÉCURISÉE DU FICHIER DE SUIVI ---
-                        # 2. LOGIQUE ID INTELLIGENT
-                        if ouvrage_sel == "Autre":
-                            pref_final = "AU"
-                        else:
-                            char_ov = ouvrage_sel[0].upper()
-                            char_sc = sc_sel[0].upper() if sc_sel != "Standard" else "G"
-                            pref_final = f"{char_ov}{char_sc}"
+                st.warning("⚠️ Aucun chantier trouvé. Configurez-les dans l'onglet Paramètres.")
                 
-                        # --- NOUVELLE LECTURE VIA GOOGLE SHEETS ---
-                        dernier_num = recuperer_dernier_numero_gsheet(chantier, pref_final)
-                        nouveau_num = dernier_num + 1
+                # On définit une liste vide par défaut pour éviter l'erreur NameError
+                liste_ouvrages = [] 
                 
-                        code_fiche = f"{pref_final}-{nouveau_num:03d}"
-                        # 3. GÉNÉRATION PDF (TA MISE EN PAGE EXACTE)
-                        pdf = FicheQualite()
-                        pdf.add_page()
-                        
-                        # Titre ouvrage libre ou sélectionné
-                        
-                        pdf.set_fill_color(240, 240, 240); pdf.set_font("Arial", 'B', 12)
-                        pdf.cell(0, 10, f"Rapport : {chantier}", 1, 1, 'L', fill=True); pdf.ln(5)
-                        
-                        pdf.set_font("Arial", 'B', 10); pdf.cell(25, 8, "Responsable : ", 0, 0)
-                        pdf.set_font("Arial", '', 10); pdf.cell(85, 8, f"{dict_chantiers[chantier]}", 0, 0)
-                        pdf.set_font("Arial", 'B', 10); pdf.cell(40, 8, "ID : ", 0, 0, 'R')
-                        pdf.set_font("Arial", '', 10); pdf.cell(20, 8, f"{code_fiche}", 0, 1, 'L')
-
-                        pdf.set_font("Arial", 'B', 10); pdf.cell(25, 8, "Controleur: ", 0, 0)
-                        pdf.set_font("Arial", '', 10); pdf.cell(85, 8, f"{nom_final}", 0, 0)
-                        pdf.set_font("Arial", 'B', 10); pdf.cell(40, 8, "Ouvrage : ", 0, 0, 'R')
-                        sc_display = sc_sel if 'sc_sel' in locals() else "Général"
-                        pdf.set_font("Arial", '', 10); pdf.cell(20, 8, f"{ouvrage_sel} ({sc_display})", 0, 1, 'L')
-                        pdf.ln(8)
-
-                        # Tableau des points de contrôle
-                        pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", 'B', 10)
-                        pdf.cell(40, 10, "Catégorie", 1, 0, 'C', fill=True)
-                        pdf.cell(100, 10, "Point de contrôle", 1, 0, 'C', fill=True)
-                        pdf.cell(50, 10, "Statut", 1, 1, 'C', fill=True)
-
-                        pdf.set_font("Arial", '', 9)
-                        for pt_txt, info in controles.items():
-                            etat, cat_name = info
-                            pdf.cell(40, 10, str(cat_name), 1, 0, 'L')
-                            pdf.cell(100, 10, str(pt_txt), 1, 0, 'L')
-                            status = "OK" if etat else "NON CONFORME"
-                            if not etat: pdf.set_text_color(200, 0, 0)
-                            pdf.cell(50, 10, status, 1, 1, 'C')
-                            pdf.set_text_color(0, 0, 0)
-
-                        # Observations
-                        pdf.ln(10)
-                        if commentaire.strip():
-                            pdf.set_font("Arial", 'B', 12); pdf.cell(0, 10, "OBSERVATIONS :", 0, 1, 'L')
-                            pdf.set_font("Arial", '', 11); pdf.multi_cell(0, 8, commentaire, border=1, align='L')
-                            pdf.ln(5)
-
-                        # Photo
-                        if photo:
-                            pdf.add_page()
-                            pdf.set_font("Arial", 'B', 12); pdf.cell(0, 10, "Photo de l'ouvrage :", 0, 1, 'L')
-                            with open("temp_photo.png","temp_photo.jpeg","temp_photo.jpg", "wb") as f:
-                                f.write(photo.getbuffer())
-                            pdf.image("temp_photo.png","temp_photo.jpeg","temp_photo.jpg", x=10, y=30, w=180)
-
-                        # Finalisation et stockage session
-                        pdf_data = pdf.output(dest='S')
-                        st.session_state.pdf_bytes = bytes(pdf_data) if not isinstance(pdf_data, str) else pdf_data.encode('latin-1')
-                        st.session_state.nom_fichier = f"Rapport_{code_fiche}_{chantier}.pdf"
-                        st.session_state.temp_num = nouveau_num
-                        st.session_state.temp_pref = pref_final
-                        st.success(f"✅ Aperçu prêt ! ({code_fiche})")
-
-                    except Exception as e:
-                        st.error(f"Erreur technique : {e}")
-
-            # --- 8. AFFICHAGE DE L'APERÇU ET ENVOI ---
-            if st.session_state.get('pdf_bytes'):
-                b64 = base64.b64encode(st.session_state.pdf_bytes).decode('utf-8')
-                st.markdown(f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="600"></iframe>', unsafe_allow_html=True)
+                if df is not None and not df.empty:
+                    liste_ouvrages = [ov for ov in df['Ouvrage'].unique() if ov != "_GENERAL" and ov != ""]
                 
-                if st.button("💾 2. Sauvegarder & Envoyer"):
-                    if envoyer_par_email(st.session_state.pdf_bytes, st.session_state.nom_fichier, chantier, ouvrage_sel):
-                        valider_numero_gsheet(chantier, st.session_state.temp_pref, st.session_state.temp_num)
-                        st.toast("✅ Rapport envoyé avec succès !")
-                        time.sleep(3)
-                        st.session_state.pdf_bytes = None
-                        if 'temp_photo' in st.session_state:
-                            del st.session_state['temp_photo']
-                  
-                # 4. RELANCE DE LA PAGE
-                # Cela remet l'interface à zéro pour le prochain ouvrage
-                        st.rerun()
+                # Maintenant 'liste_ouvrages' existe toujours, même si elle est vide []
+                
+                # 1. Sélection de l'Ouvrage (Regards, Bordures...)
+                # Modifie la création de la liste
+                    # --- 1. SÉLECTION DE L'OUVRAGE ---
+                # --- 1. SÉLECTION DE L'OUVRAGE ---
+                liste_ouvrages = [ov for ov in df['Ouvrage'].unique() if ov != "_GENERAL" and ov != ""]
+                liste_ouvrages.append("Autre")
+        
+                ouvrage_sel = st.selectbox("🏗️ Ouvrage à contrôler", ["Sélectionner..."] + liste_ouvrages, key="sel_ouv_main")
+        
+                if ouvrage_sel != "Sélectionner...":
+                    # --- 2. GESTION DU CAS 'AUTRE' VS NORMAL ---
+                    if ouvrage_sel == "Autre":
+                        nom_ouvrage_libre = st.text_input("📝 Nom de l'ouvrage non prévu", placeholder="Ex: Muret, Escalier...")
+                        ouvrage_final_nom = nom_ouvrage_libre if nom_ouvrage_libre else "Autre ouvrage"
+                        # On crée un DataFrame vide avec les colonnes du Sheets pour éviter les erreurs NameError
+                        df_ouv = pd.DataFrame(columns=df.columns)
+                        st.info("💡 Pour cet ouvrage, vous pouvez remplir les contrôles généraux et l'observation ci-dessous.")
+                    else:
+                        df_ouv = df[df['Ouvrage'] == ouvrage_sel]
+                        ouvrage_final_nom = ouvrage_sel
+        
+                    # --- 3. SOUS-CATÉGORIES ---
+                    df_scat = df_ouv[df_ouv['Niveau'].isin(['S-Cat', 'Type'])]
+                    sc_sel = "Standard" # Valeur par défaut si vide
+                    
+                    if not df_scat.empty:
+                        sc_list = df_scat['Sous-Catégorie / Type'].unique().tolist()
+                        sc_sel = st.selectbox("🔍 Sous-catégorie / Modèle", ["Sélectionner..."] + sc_list, key="sel_scat")
+        
+                        if sc_sel != "Sélectionner...":
+                            df_filtre_sc = df_scat[df_scat['Sous-Catégorie / Type'] == sc_sel]
+                            deja_affiche = []
+        
+                            for i, row in df_filtre_sc.iterrows():
+                                question_texte = row['Question ou Option']
+                                if pd.isna(question_texte) or str(question_texte).strip() == "":
+                                    continue
+        
+                                if row['Niveau'] == 'Type':
+                                    if sc_sel not in deja_affiche:
+                                        st.radio(f"Configuration {sc_sel}", ["Ligne droite", "Courbe"], key=f"rad_{sc_sel}_{i}")
+                                        deja_affiche.append(sc_sel)
+                                else:
+                                    st.checkbox(str(question_texte), key=f"chk_{question_texte}")
+        
+                    # --- 4. QUESTIONS FIXES DE L'OUVRAGE ---
+                    df_fixes = df_ouv[df_ouv['Niveau'] == 'Ouvrage']
+                    if not df_fixes.empty:
+                        st.subheader(f"✅ Points de contrôle {ouvrage_final_nom}")
+                        for i, row in df_fixes.iterrows():
+                            st.checkbox(row['Question ou Option'], key=f"chk_{row['Question ou Option']}")
+        
+                    # --- 5. QUESTIONS GÉNÉRALES ---
+                    st.subheader("🌍 Contrôles Généraux")
+                    df_gen_data = df[df['Ouvrage'] == '_GENERAL']
+                    for i, row in df_gen_data.iterrows():
+                        q_txt = str(row['Question ou Option']).strip()
+                        st.checkbox(q_txt, key=f"chk_gen_{q_txt}")
+        
+                    # --- 6. OBSERVATIONS ET PHOTO ---
+                    st.divider()
+                    commentaire = st.text_area("📝 Observations particulières", key="comm_zone")
+                    # --- 6. Capture ou Import Photo ---
+                    st.subheader("📸 Justificatif Photo")
+                    
+                    # file_uploader permet de choisir entre l'appareil photo et la galerie sur mobile
+                    photo = st.file_uploader(
+                        "Prendre une photo ou choisir une image", 
+                        type=['png', 'jpg', 'jpeg'],
+                        key=f"upload_{ouvrage_sel}"
+                    )
+                    if photo:
+                        st.image(photo, caption="Aperçu de la photo sélectionnée", width=300)
+                        # Stockage en session
+                        st.session_state['temp_photo_bytes'] = photo.getvalue()
+        
+                    # --- 7. BOUTON DE GÉNÉRATION (CONTENU INCHANGÉ) ---
+                    if st.button("🚀 1. Générer l'Aperçu", key=f"btn_generer_{ouvrage_sel}"):
+                        if not nom_final:
+                            st.error("Indiquez le contrôleur.")
+                        else:
+                            try:
+                                # 1. RÉCUPÉRATION DES RÉPONSES
+                                controles = {}
+                                # Questions Ouvrage
+                                for _, row in df_ouv.iterrows():
+                                    q_txt = row['Question ou Option']
+                                    key_chk = f"chk_{q_txt}"
+                                    if key_chk in st.session_state:
+                                        controles[q_txt] = (st.session_state[key_chk], row['Catégorie Question'])
+        
+                                # Questions Générales
+                                for _, row in df_gen_data.iterrows():
+                                    q_txt = str(row['Question ou Option']).strip()
+                                    key_gen = f"chk_gen_{q_txt}"
+                                    if key_gen in st.session_state:
+                                        cat_name = row['Catégorie Question'] if pd.notna(row['Catégorie Question']) else "Général"
+                                        controles[q_txt] = (st.session_state[key_gen], cat_name)
+        
+                                # 2. LOGIQUE ID INTELLIGENT
+                                if ouvrage_sel == "Autre":
+                                    pref_final = "AU"
+                                else:
+                                    char_ov = ouvrage_sel[0].upper()
+                                    char_sc = sc_sel[0].upper() if sc_sel != "Standard" else "G"
+                                    pref_final = f"{char_ov}{char_sc}"
+        
+                                # --- LECTURE SÉCURISÉE DU FICHIER DE SUIVI ---
+                                # 2. LOGIQUE ID INTELLIGENT
+                                if ouvrage_sel == "Autre":
+                                    pref_final = "AU"
+                                else:
+                                    char_ov = ouvrage_sel[0].upper()
+                                    char_sc = sc_sel[0].upper() if sc_sel != "Standard" else "G"
+                                    pref_final = f"{char_ov}{char_sc}"
+                        
+                                # --- NOUVELLE LECTURE VIA GOOGLE SHEETS ---
+                                dernier_num = recuperer_dernier_numero_gsheet(chantier, pref_final)
+                                nouveau_num = dernier_num + 1
+                        
+                                code_fiche = f"{pref_final}-{nouveau_num:03d}"
+                                # 3. GÉNÉRATION PDF (TA MISE EN PAGE EXACTE)
+                                pdf = FicheQualite()
+                                pdf.add_page()
+                                
+                                # Titre ouvrage libre ou sélectionné
+                                
+                                pdf.set_fill_color(240, 240, 240); pdf.set_font("Arial", 'B', 12)
+                                pdf.cell(0, 10, f"Rapport : {chantier}", 1, 1, 'L', fill=True); pdf.ln(5)
+                                
+                                pdf.set_font("Arial", 'B', 10); pdf.cell(25, 8, "Responsable : ", 0, 0)
+                                pdf.set_font("Arial", '', 10); pdf.cell(85, 8, f"{dict_chantiers[chantier]}", 0, 0)
+                                pdf.set_font("Arial", 'B', 10); pdf.cell(40, 8, "ID : ", 0, 0, 'R')
+                                pdf.set_font("Arial", '', 10); pdf.cell(20, 8, f"{code_fiche}", 0, 1, 'L')
+        
+                                pdf.set_font("Arial", 'B', 10); pdf.cell(25, 8, "Controleur: ", 0, 0)
+                                pdf.set_font("Arial", '', 10); pdf.cell(85, 8, f"{nom_final}", 0, 0)
+                                pdf.set_font("Arial", 'B', 10); pdf.cell(40, 8, "Ouvrage : ", 0, 0, 'R')
+                                sc_display = sc_sel if 'sc_sel' in locals() else "Général"
+                                pdf.set_font("Arial", '', 10); pdf.cell(20, 8, f"{ouvrage_sel} ({sc_display})", 0, 1, 'L')
+                                pdf.ln(8)
+        
+                                # Tableau des points de contrôle
+                                pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", 'B', 10)
+                                pdf.cell(40, 10, "Catégorie", 1, 0, 'C', fill=True)
+                                pdf.cell(100, 10, "Point de contrôle", 1, 0, 'C', fill=True)
+                                pdf.cell(50, 10, "Statut", 1, 1, 'C', fill=True)
+        
+                                pdf.set_font("Arial", '', 9)
+                                for pt_txt, info in controles.items():
+                                    etat, cat_name = info
+                                    pdf.cell(40, 10, str(cat_name), 1, 0, 'L')
+                                    pdf.cell(100, 10, str(pt_txt), 1, 0, 'L')
+                                    status = "OK" if etat else "NON CONFORME"
+                                    if not etat: pdf.set_text_color(200, 0, 0)
+                                    pdf.cell(50, 10, status, 1, 1, 'C')
+                                    pdf.set_text_color(0, 0, 0)
+        
+                                # Observations
+                                pdf.ln(10)
+                                if commentaire.strip():
+                                    pdf.set_font("Arial", 'B', 12); pdf.cell(0, 10, "OBSERVATIONS :", 0, 1, 'L')
+                                    pdf.set_font("Arial", '', 11); pdf.multi_cell(0, 8, commentaire, border=1, align='L')
+                                    pdf.ln(5)
+        
+                                # Photo
+                                if photo:
+                                    pdf.add_page()
+                                    pdf.set_font("Arial", 'B', 12); pdf.cell(0, 10, "Photo de l'ouvrage :", 0, 1, 'L')
+                                    with open("temp_photo.png","temp_photo.jpeg","temp_photo.jpg", "wb") as f:
+                                        f.write(photo.getbuffer())
+                                    pdf.image("temp_photo.png","temp_photo.jpeg","temp_photo.jpg", x=10, y=30, w=180)
+        
+                                # Finalisation et stockage session
+                                pdf_data = pdf.output(dest='S')
+                                st.session_state.pdf_bytes = bytes(pdf_data) if not isinstance(pdf_data, str) else pdf_data.encode('latin-1')
+                                st.session_state.nom_fichier = f"Rapport_{code_fiche}_{chantier}.pdf"
+                                st.session_state.temp_num = nouveau_num
+                                st.session_state.temp_pref = pref_final
+                                st.success(f"✅ Aperçu prêt ! ({code_fiche})")
+        
+                            except Exception as e:
+                                st.error(f"Erreur technique : {e}")
+        
+                    # --- 8. AFFICHAGE DE L'APERÇU ET ENVOI ---
+                    if st.session_state.get('pdf_bytes'):
+                        b64 = base64.b64encode(st.session_state.pdf_bytes).decode('utf-8')
+                        st.markdown(f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="600"></iframe>', unsafe_allow_html=True)
+                        
+                        if st.button("💾 2. Sauvegarder & Envoyer"):
+                            if envoyer_par_email(st.session_state.pdf_bytes, st.session_state.nom_fichier, chantier, ouvrage_sel):
+                                valider_numero_gsheet(chantier, st.session_state.temp_pref, st.session_state.temp_num)
+                                st.toast("✅ Rapport envoyé avec succès !")
+                                time.sleep(3)
+                                st.session_state.pdf_bytes = None
+                                if 'temp_photo' in st.session_state:
+                                    del st.session_state['temp_photo']
+                          
+                        # 4. RELANCE DE LA PAGE
+                        # Cela remet l'interface à zéro pour le prochain ouvrage
+                                st.rerun()
 
 # 3. Encore ELIF
 elif st.session_state.page == "archives":
