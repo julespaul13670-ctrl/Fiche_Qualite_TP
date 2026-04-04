@@ -20,6 +20,38 @@ import gspread
 from google.oauth2.service_account import Credentials
 st.set_page_config(page_title="Qualité Exécution VRD", layout="wide")
 
+# --- GESTION CENTRALE DE L'API GOOGLE ---
+
+@st.cache_resource
+def obtenir_client_gsheet():
+    """Crée une seule connexion pour toute la session (évite les 429)"""
+    try:
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+        return gspread.authorize(creds)
+    except Exception as e:
+        st.error(f"Erreur d'authentification Cloud : {e}")
+        return None
+
+@st.cache_data(ttl=300)
+def lire_onglet_cache(nom_onglet):
+    """Lit un onglet et garde les données en mémoire 5 minutes"""
+    client = obtenir_client_gsheet()
+    if client:
+        try:
+            spreadsheet = client.open("Suivi_Qualite_BTP")
+            return spreadsheet.worksheet(nom_onglet).get_all_records()
+        except Exception as e:
+            st.error(f"Erreur de lecture {nom_onglet}: {e}")
+    return []
+
+def obtenir_onglet_ecriture(nom_onglet):
+    """Retourne l'objet onglet sans cache pour permettre l'écriture (append/update)"""
+    client = obtenir_client_gsheet()
+    if client:
+        return client.open("Suivi_Qualite_BTP").worksheet(nom_onglet)
+    return None
+    
 @st.cache_data(ttl=300)
 def charger_donnees_stock():
     try:
@@ -188,15 +220,13 @@ try:
 
     # 1. Chargement Chantiers (Feuille: liste_chantiers)
     sheet_ch = spreadsheet.worksheet("liste_chantiers")
-    data_ch = sheet_ch.get_all_records()
-    # Création du dictionnaire {Nom: Responsable}
-    dict_chantiers = {row['Nom']: row['Responsable'] for row in data_ch}
+    # --- CHARGEMENT DES DONNÉES AU LANCEMENT ---
+    data_ch = lire_onglet_cache("liste_chantiers")
+    dict_chantiers = {row['Nom']: row['Responsable'] for row in data_ch} if data_ch else {}
     liste_chantiers = list(dict_chantiers.keys())
-
-    # 2. Chargement Personnel (Feuille: liste_personnel)
-    sheet_perso = spreadsheet.worksheet("liste_personnel")
-    data_p = sheet_perso.get_all_records()
-    liste_personnel = [row['Nom'] for row in data_p]
+    
+    data_p = lire_onglet_cache("liste_personnel")
+    liste_personnel = [row['Nom'] for row in data_p] if data_p else []
 
 except Exception as e:
     st.error(f"⚠️ Erreur de synchronisation Cloud : {e}")
@@ -721,28 +751,16 @@ elif st.session_state.page == "archives":
 
 
 # --- PAGE GESTION DU STOCK ---
-# --- PAGE GESTION DU STOCK (VERSION CLOUD GOOGLE SHEETS SÉCURISÉE) ---
 elif st.session_state.page == "stock":
-    st.title("📦 Gestion des Stocks (Cloud)")
+    st.title("📦 Gestion des Stocks")
 
-    # 1. Chargement et Nettoyage immédiat des catégories pour éviter les doublons
-    data_stock = charger_donnees_stock()
-    if data_stock:
-        df_stock = pd.DataFrame(data_stock)
-        # On nettoie : Tout en majuscule et sans espaces inutiles
-        df_stock['Categorie'] = df_stock['Categorie'].astype(str).str.strip().str.upper()
-    else:
-        df_stock = pd.DataFrame(columns=["Chantier", "Categorie", "Article", "Quantite", "Unite"])
+    # Lecture via cache
+    data_stock = lire_onglet_cache("inventaire_stock")
+    df_stock = pd.DataFrame(data_stock) if data_stock else pd.DataFrame(columns=["Chantier", "Categorie", "Article", "Quantite", "Unite"])
+    df_stock['Categorie'] = df_stock['Categorie'].astype(str).str.strip().str.upper()
 
-    # 2. Accès direct pour les écritures
-    try:
-        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-        client = gspread.authorize(creds)
-        sheet_stock = client.open("Suivi_Qualite_BTP").worksheet("inventaire_stock")
-    except:
-        st.error("Impossible de préparer l'écriture Cloud.")
-
+    # Préparation objet pour écriture
+    sheet_stock = obtenir_onglet_ecriture("inventaire_stock")
     if liste_chantiers:
         chantier_sel = st.selectbox("📍 Sélectionner le chantier", ["Sélectionner..."] + liste_chantiers)
         
@@ -852,26 +870,18 @@ elif st.session_state.page == "parametres":
 
     with tab1:
         st.subheader("Gestion des Chantiers (Cloud)")
+        sheet_ch_write = obtenir_onglet_ecriture("liste_chantiers") # Pour écrire
         with st.form("ajout_ch", clear_on_submit=True):
             c1, c2 = st.columns(2)
             n_nom = c1.text_input("Nom du chantier")
             n_resp = c2.text_input("Responsable")
             if st.form_submit_button("Ajouter sur le Cloud"):
-                if n_nom and n_resp:
-                    sheet_ch.append_row([n_nom, n_resp])
-                    st.cache_data.clear()  # Vide le cache pour voir le nouveau chantier
+                if n_nom and n_resp and sheet_ch_write:
+                    sheet_ch_write.append_row([n_nom, n_resp])
+                    st.cache_data.clear() # Vide le cache pour rafraîchir tout le site
                     st.success("Enregistré !")
                     st.rerun()
-                else:
-                    st.error("Remplissez tous les champs")
-    
-        st.write("### Liste actuelle")
-        st.table(pd.DataFrame(data_ch)) 
-    
-        if st.button("🔄 Actualiser la liste des chantiers", key="btn_refresh_ch"):
-            st.cache_data.clear()
-            st.rerun()
-
+                    
     with tab2:
         st.subheader("Gestion du Personnel (Cloud)")
         with st.form("ajout_perso", clear_on_submit=True):
