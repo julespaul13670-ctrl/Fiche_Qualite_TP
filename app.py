@@ -358,7 +358,6 @@ elif st.session_state.page == "Ajouter":
                 date_auto = st.date_input("📅 Date", datetime.now())
     else:
         st.warning("⚠️ Aucun chantier trouvé. Configurez-les dans l'onglet Paramètres.")
-        
             st.divider()
             # --- 1. SÉLECTION CASCADE ---
         df = st.session_state.df_config
