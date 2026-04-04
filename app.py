@@ -833,27 +833,47 @@ elif st.session_state.page == "parametres":
     # Création des onglets
     tab1, tab2, tab3, tab4 = st.tabs(["🏗️ Chantiers", "👤 Contrôleurs", "📐 Structure & Questions", "🔑 Sécurité"])
 
-    with st.form("ajout_ch", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        n_nom = c1.text_input("Nom du chantier")
-        n_resp = c2.text_input("Responsable")
-        if st.form_submit_button("Ajouter sur le Cloud"):
-            sheet_ch.append_row([n_nom, n_resp])
-            st.success("Enregistré !"); st.rerun()
-    st.table(pd.DataFrame(data_ch)) # Affiche la liste actuelle
-        if st.button("🔄 Forcer la mise à jour des listes"):
-        st.cache_data.clear() # Vide le cache
-        st.rerun()
+    with tab1:
+        st.subheader("Gestion des Chantiers (Cloud)")
+        with st.form("ajout_ch", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            n_nom = c1.text_input("Nom du chantier")
+            n_resp = c2.text_input("Responsable")
+            if st.form_submit_button("Ajouter sur le Cloud"):
+                if n_nom and n_resp:
+                    sheet_ch.append_row([n_nom, n_resp])
+                    st.cache_data.clear()  # Vide le cache pour voir le nouveau chantier
+                    st.success("Enregistré !")
+                    st.rerun()
+                else:
+                    st.error("Remplissez tous les champs")
+    
+        st.write("### Liste actuelle")
+        st.table(pd.DataFrame(data_ch)) 
+    
+        if st.button("🔄 Actualiser la liste des chantiers", key="btn_refresh_ch"):
+            st.cache_data.clear()
+            st.rerun()
 
-    with st.form("ajout_perso", clear_on_submit=True):
-        n_p = st.text_input("Nom du contrôleur")
-        if st.form_submit_button("Ajouter sur le Cloud"):
-            sheet_perso.append_row([n_p])
-            st.success("Enregistré !"); st.rerun()
-    st.table(pd.DataFrame(data_p))
-        if st.button("🔄 Forcer la mise à jour des listes"):
-        st.cache_data.clear() # Vide le cache
-        st.rerun()
+    with tab2:
+        st.subheader("Gestion du Personnel (Cloud)")
+        with st.form("ajout_perso", clear_on_submit=True):
+            n_p = st.text_input("Nom du contrôleur")
+            if st.form_submit_button("Ajouter sur le Cloud"):
+                if n_p:
+                    sheet_perso.append_row([n_p])
+                    st.cache_data.clear()  # Vide le cache pour voir le nouveau nom
+                    st.success("Enregistré !")
+                    st.rerun()
+                else:
+                    st.error("Entrez un nom")
+    
+        st.write("### Liste actuelle")
+        st.table(pd.DataFrame(data_p))
+    
+        if st.button("🔄 Actualiser la liste du personnel", key="btn_refresh_perso"):
+            st.cache_data.clear()
+            st.rerun()
 
     with tab3:
         st.subheader("📐 Éditeur de Structure VRD")
