@@ -108,7 +108,7 @@ def envoyer_par_email(pdf_bytes, nom_fichier, chantier, ouvrage):
         st.error(f"Erreur d'envoi mail : {e}")
         return False
     
-
+@st.cache_data(ttl=300)
 def valider_numero_gsheet(chantier, pref, num):
     try:
         scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -140,6 +140,7 @@ def valider_numero_gsheet(chantier, pref, num):
     except Exception as e:
         st.error(f"Erreur écriture GSheet : {e}")
         
+@st.cache_data(ttl=300)        
 def recuperer_dernier_numero_gsheet(chantier, pref):
     try:
         scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
