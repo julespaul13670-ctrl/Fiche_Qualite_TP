@@ -517,19 +517,25 @@ elif st.session_state.page == "Ajouter":
             
                                     # Photo
                                     if photo:
+                                        # 1. On récupère l'extension réelle (ex: .jpg ou .png)
+                                        extension = photo.name.split('.')[-1].lower()
+                                        nom_temp = f"temp_photo_rapport.{extension}"
+                                        
+                                        # 2. On enregistre le fichier avec sa VRAIE extension
+                                        with open(nom_temp, "wb") as f:
+                                            f.write(photo.getbuffer())
+                                        
+                                        # 3. Mise en page PDF
                                         pdf.add_page()
                                         pdf.set_font("Arial", 'B', 12)
                                         pdf.cell(0, 10, "Photo de l'ouvrage :", 0, 1, 'L')
                                         
-                                        # 1. On enregistre sous UN SEUL NOM temporaire (peu importe l'extension)
-                                        nom_temp = "temp_photo_rapport.png"
-                                        
-                                        with open(nom_temp, "wb") as f:
-                                            f.write(photo.getbuffer())
-                                        
-                                        # 2. On insère cette image unique dans le PDF
-                                        # Attention : pdf.image ne prend qu'UN seul nom de fichier en premier argument
-                                        pdf.image(nom_temp, x=10, y=30, w=180)
+                                        # 4. On insère l'image (FPDF reconnaît maintenant le bon format)
+                                        try:
+                                            pdf.image(nom_temp, x=10, y=30, w=180)
+                                        except Exception as e:
+                                            st.error(f"Erreur format image : {e}")
+                                            
                                     # Finalisation et stockage session
                                     pdf_data = pdf.output(dest='S')
                                     st.session_state.pdf_bytes = bytes(pdf_data) if not isinstance(pdf_data, str) else pdf_data.encode('latin-1')
