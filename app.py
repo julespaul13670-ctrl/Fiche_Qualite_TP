@@ -725,11 +725,16 @@ elif st.session_state.page == "archives":
 elif st.session_state.page == "stock":
     st.title("📦 Gestion des Stocks (Cloud)")
 
-    # Chargement via le cache (Protection 429)
+    # 1. Chargement et Nettoyage immédiat des catégories pour éviter les doublons
     data_stock = charger_donnees_stock()
-    df_stock = pd.DataFrame(data_stock) if data_stock else pd.DataFrame(columns=["Chantier", "Categorie", "Article", "Quantite", "Unite"])
+    if data_stock:
+        df_stock = pd.DataFrame(data_stock)
+        # On nettoie : Tout en majuscule et sans espaces inutiles
+        df_stock['Categorie'] = df_stock['Categorie'].astype(str).str.strip().str.upper()
+    else:
+        df_stock = pd.DataFrame(columns=["Chantier", "Categorie", "Article", "Quantite", "Unite"])
 
-    # Accès direct pour les écritures (On ne cache pas l'objet sheet pour l'écriture)
+    # 2. Accès direct pour les écritures
     try:
         scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
@@ -748,7 +753,7 @@ elif st.session_state.page == "stock":
             with st.expander("➕ Ajouter un article au stock", expanded=False):
                 with st.form("form_stock_cloud", clear_on_submit=True):
                     c1, c2 = st.columns(2)
-                    cat_val = c1.text_input("Catégorie (ex: BORDURES)")
+                    cat_val = c1.text_input("Catégorie (ex: BORDURES)").strip().upper()
                     det_val = c2.text_input("Détail (ex: T2 Gris)")
                     c3, c4 = st.columns(2)
                     qte_val = c3.number_input("Quantité", min_value=0, value=0)
@@ -756,31 +761,32 @@ elif st.session_state.page == "stock":
                     
                     if st.form_submit_button("🚀 Enregistrer sur le Cloud"):
                         if cat_val and det_val:
-                            # IMPORTANT : On force la catégorie en MAJUSCULES pour éviter les doublons (Bordure vs bordure)
-                            sheet_stock.append_row([chantier_sel, cat_val.strip().upper(), det_val, qte_val, uni_val])
-                            st.cache_data.clear() # On vide le cache pour forcer la relecture
+                            sheet_stock.append_row([chantier_sel, cat_val, det_val, qte_val, uni_val])
+                            st.cache_data.clear() 
                             st.success(f"✅ {det_val} enregistré !")
                             st.rerun()
 
             st.write("### 🔍 Consultation du stock")
 
             # Filtrage pour le chantier actuel
-            stock_actuel = df_stock[df_stock["Chantier"] == chantier_sel]
+            stock_actuel = df_stock[df_stock["Chantier"] == chantier_sel].copy()
             
             if stock_actuel.empty:
                 st.info("Le stock est vide pour ce chantier.")
             else:
-                # REGROUPEMENT PAR CATÉGORIE
-                # On récupère les catégories uniques (ex: BORDURES, REGARDS)
+                # --- REGROUPEMENT PAR CATÉGORIE ---
                 categories = sorted(stock_actuel["Categorie"].unique())
                 
                 for cat in categories:
-                    # On crée UN SEUL expander par catégorie
-                    with st.expander(f"📂 {cat.upper()}", expanded=False):
-                        # On filtre les articles appartenant à cette catégorie
+                    with st.expander(f"📂 {cat}", expanded=False):
+                        # Filtrage des articles de cette catégorie
                         items_cat = stock_actuel[stock_actuel["Categorie"] == cat]
                         
                         for idx, row in items_cat.iterrows():
+                            # Calcul de la ligne réelle dans Google Sheets
+                            # On ajoute 2 car Excel commence à 1 et il y a l'entête
+                            ligne_reelle = int(idx) + 2
+                            
                             with st.container(border=True):
                                 col_nom, col_saisie, col_valider, col_poubelle = st.columns([4, 2, 1, 1])
                                 
@@ -792,16 +798,13 @@ elif st.session_state.page == "stock":
                                     key=f"input_{idx}", label_visibility="collapsed"
                                 )
                                 
-                                # Index GSheet (Index Pandas + 2 car en-tête)
-                                row_gsheet = int(idx) + 2
-                                
                                 if col_valider.button("💾", key=f"save_{idx}"):
-                                    sheet_stock.update_cell(row_gsheet, 4, int(nvelle_qte))
+                                    sheet_stock.update_cell(ligne_reelle, 4, int(nvelle_qte))
                                     st.cache_data.clear()
                                     st.rerun()
 
                                 if col_poubelle.button("🗑️", key=f"del_{idx}"):
-                                    sheet_stock.delete_rows(row_gsheet)
+                                    sheet_stock.delete_rows(ligne_reelle)
                                     st.cache_data.clear()
                                     st.rerun()
 
