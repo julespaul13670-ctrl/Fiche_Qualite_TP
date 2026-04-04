@@ -437,9 +437,17 @@ elif st.session_state.page == "Ajouter":
                                     # Questions Ouvrage
                                     for _, row in df_ouv.iterrows():
                                         q_txt = row['Question ou Option']
-                                       key_chk = f"chk_{q_txt}"
-                                         if key_chk in st.session_state:
+                                        key_chk = f"chk_{q_txt}"
+                                        if key_chk in st.session_state:
                                             controles[q_txt] = (st.session_state[key_chk], row['Catégorie Question'])
+            
+                                    # Questions Générales
+                                    for _, row in df_gen_data.iterrows():
+                                        q_txt = str(row['Question ou Option']).strip()
+                                        key_gen = f"chk_gen_{q_txt}"
+                                        if key_gen in st.session_state:
+                                            cat_name = row['Catégorie Question'] if pd.notna(row['Catégorie Question']) else "Général"
+                                            controles[q_txt] = (st.session_state[key_gen], cat_name)
             
                                     # Questions Générales
                                     for _, row in df_gen_data.iterrows():
