@@ -19,7 +19,8 @@ import time
 import gspread
 from google.oauth2.service_account import Credentials
 st.set_page_config(page_title="Qualité Exécution VRD", layout="wide")
-@st.cache_data
+
+@st.cache_data(ttl=600)
 def charger_donnees():
     # Lit le fichier Excel déposé sur ton GitHub
     df = pd.read_excel("Configuration_QuestionTP.xlsx")
@@ -840,6 +841,9 @@ elif st.session_state.page == "parametres":
             sheet_ch.append_row([n_nom, n_resp])
             st.success("Enregistré !"); st.rerun()
     st.table(pd.DataFrame(data_ch)) # Affiche la liste actuelle
+    if st.button("🔄 Forcer la mise à jour des listes"):
+    st.cache_data.clear() # Vide le cache
+    st.rerun()
 
     with st.form("ajout_perso", clear_on_submit=True):
         n_p = st.text_input("Nom du contrôleur")
@@ -847,6 +851,9 @@ elif st.session_state.page == "parametres":
             sheet_perso.append_row([n_p])
             st.success("Enregistré !"); st.rerun()
     st.table(pd.DataFrame(data_p))
+    if st.button("🔄 Forcer la mise à jour des listes"):
+    st.cache_data.clear() # Vide le cache
+    st.rerun()
 
     with tab3:
         st.subheader("📐 Éditeur de Structure VRD")
