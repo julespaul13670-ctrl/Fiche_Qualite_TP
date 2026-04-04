@@ -158,13 +158,35 @@ def recuperer_dernier_numero_gsheet(chantier, pref):
                  (df_suivi['pref'].astype(str).str.strip().str.lower() == str(pref).strip().lower())
         
         if filtre.any():
-            # On transforme la colonne num en nombres réels pour trouver le max
             nums = pd.to_numeric(df_suivi.loc[filtre, 'num'], errors='coerce').fillna(0)
             return int(nums.max())
         return 0
-    except Exception as e:
+    except Exception:
         return 0
-        
+
+# --- CONNEXION ET CHARGEMENT DES LISTES AU LANCEMENT ---
+try:
+    scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+    client = gspread.authorize(creds)
+    spreadsheet = client.open("Suivi_Qualite_BTP")
+
+    # 1. Chargement Chantiers (Feuille: liste_chantiers)
+    sheet_ch = spreadsheet.worksheet("liste_chantiers")
+    data_ch = sheet_ch.get_all_records()
+    # Création du dictionnaire {Nom: Responsable}
+    dict_chantiers = {row['Nom']: row['Responsable'] for row in data_ch}
+    liste_chantiers = list(dict_chantiers.keys())
+
+    # 2. Chargement Personnel (Feuille: liste_personnel)
+    sheet_perso = spreadsheet.worksheet("liste_personnel")
+    data_p = sheet_perso.get_all_records()
+    liste_personnel = [row['Nom'] for row in data_p]
+
+except Exception as e:
+    st.error(f"⚠️ Erreur de synchronisation Cloud : {e}")
+    # Valeurs par défaut pour éviter les plantages
+    dict_chantiers, liste_chantiers, liste_personnel = {}, [], []
 
         
 class FicheQualite(FPDF):
@@ -319,15 +341,27 @@ elif st.session_state.page == "Ajouter":
         liste_personnel = pd.read_csv(file_ctrl)["Nom"].tolist()
         
 
-        chantier = st.selectbox("📍 Choisir le chantier", ["Sélectionner..."] + list(dict_chantiers.keys()))
+        # --- SÉLECTION DU CHANTIER ET DU CONTRÔLEUR ---
+        chantier = st.selectbox("📍 Choisir le chantier", ["Sélectionner..."] + liste_chantiers)
+        
         if chantier != "Sélectionner...":
-            st.info(f"Responsable : **{dict_chantiers.get(chantier, '')}**")
+            # On récupère le responsable via le dictionnaire chargé en haut
+            st.info(f"Responsable : **{dict_chantiers.get(chantier, 'Non défini')}**")
+            
             c1, c2 = st.columns(2)
             with c1:
                 choix_nom = st.selectbox("👤 Contrôleur", ["Sélectionner..."] + liste_personnel + ["Autre..."])
-                nom_final = st.text_input("1er lettre Prenom + NOM") if choix_nom == "Autre..." else (choix_nom if choix_nom != "Sélectionner..." else "")
+                # Logique pour le nom final
+                if choix_nom == "Autre...":
+                    nom_final = st.text_input("1er lettre Prenom + NOM")
+                elif choix_nom != "Sélectionner...":
+                    nom_final = choix_nom
+                else:
+                    nom_final = ""
+                    
             with c2:
                 date_auto = st.date_input("📅 Date", datetime.now())
+    
 
             st.divider()
             # --- 1. SÉLECTION CASCADE ---
@@ -798,21 +832,21 @@ elif st.session_state.page == "parametres":
     # Création des onglets
     tab1, tab2, tab3, tab4 = st.tabs(["🏗️ Chantiers", "👤 Contrôleurs", "📐 Structure & Questions", "🔑 Sécurité"])
 
-    with tab1:
-        st.subheader("Liste des chantiers")
-        df_ch = pd.read_csv("data_chantiers.csv") if os.path.exists("data_chantiers.csv") else pd.DataFrame(columns=["Nom", "Responsable"])
-        e_ch = st.data_editor(df_ch, num_rows="dynamic", key="ed_ch", use_container_width=True)
-        if st.button("Sauvegarder Chantiers"): 
-            e_ch.to_csv("data_chantiers.csv", index=False)
-            st.success("Chantiers sauvegardés !")
+    with st.form("ajout_ch", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        n_nom = c1.text_input("Nom du chantier")
+        n_resp = c2.text_input("Responsable")
+        if st.form_submit_button("Ajouter sur le Cloud"):
+            sheet_ch.append_row([n_nom, n_resp])
+            st.success("Enregistré !"); st.rerun()
+    st.table(pd.DataFrame(data_ch)) # Affiche la liste actuelle
 
-    with tab2:
-        st.subheader("Gestion du personnel")
-        df_ct = pd.read_csv("data_controleurs.csv") if os.path.exists("data_controleurs.csv") else pd.DataFrame(columns=["Nom"])
-        e_ct = st.data_editor(df_ct, num_rows="dynamic", key="ed_ct", use_container_width=True)
-        if st.button("Sauvegarder Personnel"): 
-            e_ct.to_csv("data_controleurs.csv", index=False)
-            st.success("Personnel sauvegardé !")
+    with st.form("ajout_perso", clear_on_submit=True):
+        n_p = st.text_input("Nom du contrôleur")
+        if st.form_submit_button("Ajouter sur le Cloud"):
+            sheet_perso.append_row([n_p])
+            st.success("Enregistré !"); st.rerun()
+    st.table(pd.DataFrame(data_p))
 
     with tab3:
         st.subheader("📐 Éditeur de Structure VRD")
