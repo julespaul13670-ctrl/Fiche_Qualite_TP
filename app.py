@@ -332,23 +332,21 @@ if st.session_state.page == "Accueil":
 elif st.session_state.page == "Ajouter":
     st.title("📝 Nouveau Rapport de Contrôle")
 
-    if os.path.exists(file_ch) and os.path.exists(file_ctrl):
-        df_ch = pd.read_csv(file_ch)
-        dict_chantiers = pd.Series(df_ch.Responsable.values, index=df_ch.Nom).to_dict()
-        liste_personnel = pd.read_csv(file_ctrl)["Nom"].tolist()
-        
-
-        # --- SÉLECTION DU CHANTIER ET DU CONTRÔLEUR ---
+    # --- SÉLECTION DU CHANTIER ET DU CONTRÔLEUR (LOGIQUE CLOUD) ---
+    # On utilise 'liste_chantiers' qui a été chargée tout en haut du script via GSheet
+    if liste_chantiers:
         chantier = st.selectbox("📍 Choisir le chantier", ["Sélectionner..."] + liste_chantiers)
         
         if chantier != "Sélectionner...":
-            # On récupère le responsable via le dictionnaire chargé en haut
+            # On récupère le responsable via le dictionnaire 'dict_chantiers' chargé en haut
             st.info(f"Responsable : **{dict_chantiers.get(chantier, 'Non défini')}**")
             
             c1, c2 = st.columns(2)
             with c1:
+                # 'liste_personnel' vient aussi du chargement Cloud en haut du script
                 choix_nom = st.selectbox("👤 Contrôleur", ["Sélectionner..."] + liste_personnel + ["Autre..."])
-                # Logique pour le nom final
+                
+                # Logique pour le nom final sur le rapport
                 if choix_nom == "Autre...":
                     nom_final = st.text_input("1er lettre Prenom + NOM")
                 elif choix_nom != "Sélectionner...":
@@ -358,8 +356,9 @@ elif st.session_state.page == "Ajouter":
                     
             with c2:
                 date_auto = st.date_input("📅 Date", datetime.now())
-    
-
+    else:
+        st.warning("⚠️ Aucun chantier trouvé. Configurez-les dans l'onglet Paramètres.")
+        
             st.divider()
             # --- 1. SÉLECTION CASCADE ---
         df = st.session_state.df_config
