@@ -471,6 +471,13 @@ elif st.session_state.page == "Ajouter":
                                     nouveau_num = dernier_num + 1
                             
                                     code_fiche = f"{pref_final}-{nouveau_num:03d}"
+
+                                    st.session_state.temp_pref = pref_final
+                                    st.session_state.temp_num = nouveau_num
+                                    st.session_state.temp_code = code_fiche
+                                    st.session_state.temp_chantier = chantier
+                                    st.session_state.temp_ouvrage = ouvrage_sel
+                                    
                                     # 3. GÉNÉRATION PDF (TA MISE EN PAGE EXACTE)
                                     pdf = FicheQualite()
                                     pdf.add_page()
@@ -517,53 +524,49 @@ elif st.session_state.page == "Ajouter":
             
                                     # Photo
                                     if photo:
-                                        # 1. On récupère l'extension réelle (ex: .jpg ou .png)
-                                        extension = photo.name.split('.')[-1].lower()
-                                        nom_temp = f"temp_photo_rapport.{extension}"
-                                        
-                                        # 2. On enregistre le fichier avec sa VRAIE extension
+                                        ext = photo.name.split('.')[-1].lower()
+                                        nom_temp = f"temp_photo_rapport.{ext}"
                                         with open(nom_temp, "wb") as f:
                                             f.write(photo.getbuffer())
-                                        
-                                        # 3. Mise en page PDF
                                         pdf.add_page()
                                         pdf.set_font("Arial", 'B', 12)
                                         pdf.cell(0, 10, "Photo de l'ouvrage :", 0, 1, 'L')
-                                        
-                                        # 4. On insère l'image (FPDF reconnaît maintenant le bon format)
-                                        try:
-                                            pdf.image(nom_temp, x=10, y=30, w=180)
-                                        except Exception as e:
-                                            st.error(f"Erreur format image : {e}")
-                                            
-                                    # Finalisation et stockage session
+                                        pdf.image(nom_temp, x=10, y=30, w=180)
+
+                                    # Finalisation
                                     pdf_data = pdf.output(dest='S')
                                     st.session_state.pdf_bytes = bytes(pdf_data) if not isinstance(pdf_data, str) else pdf_data.encode('latin-1')
                                     st.session_state.nom_fichier = f"Rapport_{code_fiche}_{chantier}.pdf"
-                                    st.session_state.temp_num = nouveau_num
-                                    st.session_state.temp_pref = pref_final
+                                    
                                     st.success(f"✅ Aperçu prêt ! ({code_fiche})")
-            
+                                    st.rerun() # On relance pour figer l'affichage du PDF
+
                                 except Exception as e:
                                     st.error(f"Erreur technique : {e}")
-            
-                        # --- 8. AFFICHAGE DE L'APERÇU ET ENVOI ---
+
+                        # --- 9. AFFICHAGE ET ENVOI (EN DEHORS DU BOUTON 1) ---
                         if st.session_state.get('pdf_bytes'):
+                            # Affichage de l'aperçu
                             b64 = base64.b64encode(st.session_state.pdf_bytes).decode('utf-8')
                             st.markdown(f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="600"></iframe>', unsafe_allow_html=True)
                             
                             if st.button("💾 2. Sauvegarder & Envoyer"):
-                                if envoyer_par_email(st.session_state.pdf_bytes, st.session_state.nom_fichier, chantier, ouvrage_sel):
-                                    valider_numero_gsheet(chantier, st.session_state.temp_pref, st.session_state.temp_num)
-                                    st.toast("✅ Rapport envoyé avec succès !")
-                                    time.sleep(3)
-                                    st.session_state.pdf_bytes = None
-                                    if 'temp_photo' in st.session_state:
-                                        del st.session_state['temp_photo']
-                              
-                            # 4. RELANCE DE LA PAGE
-                            # Cela remet l'interface à zéro pour le prochain ouvrage
-                                    st.rerun()
+                                with st.spinner("Envoi en cours..."):
+                                    # On récupère les infos sauvegardées
+                                    c_pref = st.session_state.temp_pref
+                                    c_num = st.session_state.temp_num
+                                    c_chantier = st.session_state.temp_chantier
+                                    c_ouvrage = st.session_state.temp_ouvrage
+                                    
+                                    if envoyer_par_email(st.session_state.pdf_bytes, st.session_state.nom_fichier, c_chantier, c_ouvrage):
+                                        # Mise à jour du numéro sur Google Sheets
+                                        valider_numero_gsheet(c_chantier, c_pref, c_num)
+                                        st.toast("✅ Rapport envoyé avec succès !")
+                                        time.sleep(2)
+                                        
+                                        # Nettoyage et remise à zéro
+                                        st.session_state.pdf_bytes = None
+                                        st.rerun()
 
 # 3. Encore ELIF
 elif st.session_state.page == "archives":
