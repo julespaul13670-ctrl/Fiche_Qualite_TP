@@ -708,9 +708,7 @@ elif st.session_state.page == "stock":
         st.stop() # On arrête si la connexion échoue
 
     # 2. SÉLECTION DU CHANTIER
-    file_ch = "data_chantiers.csv"
-    if os.path.exists(file_ch):
-        liste_chantiers = pd.read_csv(file_ch)["Nom"].tolist()
+    if liste_chantiers:
         chantier_sel = st.selectbox("📍 Sélectionner le chantier", ["Sélectionner..."] + liste_chantiers)
         
         if chantier_sel != "Sélectionner...":
