@@ -659,7 +659,7 @@ elif st.session_state.page == "archives":
 
 
 # --- PAGE GESTION DU STOCK ---
-# --- PAGE GESTION DU STOCK (VERSION CLOUD GOOGLE SHEETS) ---
+# --- PAGE GESTION DU STOCK (VERSION CLOUD GOOGLE SHEETS SÉCURISÉE) ---
 elif st.session_state.page == "stock":
     st.title("📦 Gestion des Stocks (Cloud)")
 
@@ -669,22 +669,24 @@ elif st.session_state.page == "stock":
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
         client = gspread.authorize(creds)
         
-        # Choix de la DEUXIÈME feuille pour le stock
-    try:
+        spreadsheet = client.open("Suivi_Qualite_BTP")
+        # On cible bien le DEUXIÈME onglet
         sheet_stock = spreadsheet.worksheet("inventaire_stock")
-        data = sheet_stock.get_all_records()
         
-        if not data:
-            # Si la feuille est vide, on définit nous-mêmes les colonnes
+        # Lecture des données
+        data_stock = sheet_stock.get_all_records()
+        
+        if not data_stock:
             df_stock = pd.DataFrame(columns=["Chantier", "Categorie", "Article", "Quantite", "Unite"])
         else:
-            df_stock = pd.DataFrame(data)
-    except gspread.exceptions.WorksheetNotFound:
-        st.error("L'onglet 'inventaire_stock' n'a pas été trouvé dans ton Google Sheet !")
-        st.stop()
+            df_stock = pd.DataFrame(data_stock)
+            
+    except Exception as e:
+        st.error(f"Erreur de connexion au Cloud : {e}")
+        st.stop() # On arrête si la connexion échoue
 
     # 2. SÉLECTION DU CHANTIER
-    file_ch = "data_chantiers.csv" # Tu peux aussi migrer les chantiers plus tard
+    file_ch = "data_chantiers.csv"
     if os.path.exists(file_ch):
         liste_chantiers = pd.read_csv(file_ch)["Nom"].tolist()
         chantier_sel = st.selectbox("📍 Sélectionner le chantier", ["Sélectionner..."] + liste_chantiers)
@@ -692,7 +694,7 @@ elif st.session_state.page == "stock":
         if chantier_sel != "Sélectionner...":
             st.divider()
             
-            # --- FORMULAIRE D'AJOUT (Reset automatique avec st.form) ---
+            # --- FORMULAIRE D'AJOUT (RESET AUTO) ---
             with st.expander("➕ Ajouter un article au stock", expanded=False):
                 with st.form("form_stock_cloud", clear_on_submit=True):
                     c1, c2 = st.columns(2)
@@ -705,16 +707,21 @@ elif st.session_state.page == "stock":
                     
                     if st.form_submit_button("🚀 Enregistrer sur le Cloud"):
                         if cat_val and det_val:
-                            # Ajout direct d'une ligne dans Google Sheets
+                            # Ajout direct dans Google Sheets
                             sheet_stock.append_row([chantier_sel, cat_val, det_val, qte_val, uni_val])
-                            st.success(f"✅ {det_val} enregistré sur Google Sheets !")
+                            st.success(f"✅ {det_val} enregistré !")
+                            time.sleep(1)
                             st.rerun()
+                        else:
+                            st.error("Veuillez remplir tous les champs.")
 
-            # --- AFFICHAGE PAR CATÉGORIES ---
+            st.write("### 🔍 Consultation du stock")
+
+            # --- AFFICHAGE PAR CATÉGORIES (ACCORDÉONS) ---
             stock_actuel = df_stock[df_stock["Chantier"] == chantier_sel]
             
             if stock_actuel.empty:
-                st.info("Aucun stock enregistré pour ce chantier sur le Cloud.")
+                st.info("Le stock est vide pour ce chantier.")
             else:
                 categories = sorted(stock_actuel["Categorie"].unique())
                 
@@ -730,20 +737,19 @@ elif st.session_state.page == "stock":
                                 
                                 col_nom.write(f"**{row['Article']}**")
                                 
-                                # --- BOUTONS DE MISE À JOUR (Synchro Google) ---
-                                # On calcule la ligne réelle dans Google Sheets (index pandas + 2 car en-tête et index 0)
-                                row_gsheet = idx + 2 
+                                # Index GSheet = index pandas + 2 (en-tête + décalage 0/1)
+                                row_gsheet = idx + 2
 
                                 if col_moins.button("➖", key=f"m_{idx}"):
-                                    nouvelle_qte = max(0, row["Quantite"] - 1)
-                                    sheet_stock.update_cell(row_gsheet, 4, nouvelle_qte) # Colonne 4 = Quantite
+                                    n_qte = max(0, row["Quantite"] - 1)
+                                    sheet_stock.update_cell(row_gsheet, 4, n_qte)
                                     st.rerun()
                                 
                                 col_qte.markdown(f"<h4 style='text-align:center; margin:0; color:#2ecc71;'>{row['Quantite']} {row['Unite']}</h4>", unsafe_allow_html=True)
                                 
                                 if col_plus.button("➕", key=f"p_{idx}"):
-                                    nouvelle_qte = row["Quantite"] + 1
-                                    sheet_stock.update_cell(row_gsheet, 4, nouvelle_qte)
+                                    n_qte = row["Quantite"] + 1
+                                    sheet_stock.update_cell(row_gsheet, 4, n_qte)
                                     st.rerun()
                                     
                                 if col_del.button("🗑️", key=f"d_{idx}"):
@@ -756,6 +762,9 @@ elif st.session_state.page == "stock":
                 if st.button("📄 Générer l'inventaire PDF", use_container_width=True):
                     pdf_bytes = generer_pdf_stock(chantier_sel, stock_actuel)
                     st.download_button("⬇️ Télécharger le PDF", pdf_bytes, f"Stock_{chantier_sel}.pdf", "application/pdf", use_container_width=True)
+    else:
+        st.warning("Veuillez d'abord configurer vos chantiers dans les Paramètres.")
+        
                     
 # 4. Encore ELIF pour les paramètres
 # --- PAGE PARAMÈTRES (VERSION NETTOYÉE ET SÉCURISÉE) ---
