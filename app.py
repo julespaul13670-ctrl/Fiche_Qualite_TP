@@ -669,14 +669,18 @@ elif st.session_state.page == "stock":
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
         client = gspread.authorize(creds)
         
-        spreadsheet = client.open("Suivi_Qualite_BTP")
+        # Choix de la DEUXIÈME feuille pour le stock
+    try:
         sheet_stock = spreadsheet.worksheet("inventaire_stock")
+        data = sheet_stock.get_all_records()
         
-        # Lecture des données depuis Google
-        data_stock = sheet_stock.get_all_records()
-        df_stock = pd.DataFrame(data_stock)
-    except Exception as e:
-        st.error(f"Erreur de connexion au Cloud : {e}")
+        if not data:
+            # Si la feuille est vide, on définit nous-mêmes les colonnes
+            df_stock = pd.DataFrame(columns=["Chantier", "Categorie", "Article", "Quantite", "Unite"])
+        else:
+            df_stock = pd.DataFrame(data)
+    except gspread.exceptions.WorksheetNotFound:
+        st.error("L'onglet 'inventaire_stock' n'a pas été trouvé dans ton Google Sheet !")
         st.stop()
 
     # 2. SÉLECTION DU CHANTIER
