@@ -332,21 +332,18 @@ if st.session_state.page == "Accueil":
 elif st.session_state.page == "Ajouter":
     st.title("📝 Nouveau Rapport de Contrôle")
 
-    # --- SÉLECTION DU CHANTIER ET DU CONTRÔLEUR (LOGIQUE CLOUD) ---
-    # On utilise 'liste_chantiers' qui a été chargée tout en haut du script via GSheet
+    # 1. On vérifie si les listes sont chargées
     if liste_chantiers:
         chantier = st.selectbox("📍 Choisir le chantier", ["Sélectionner..."] + liste_chantiers)
         
         if chantier != "Sélectionner...":
-            # On récupère le responsable via le dictionnaire 'dict_chantiers' chargé en haut
+            # On affiche le responsable
             st.info(f"Responsable : **{dict_chantiers.get(chantier, 'Non défini')}**")
             
             c1, c2 = st.columns(2)
             with c1:
-                # 'liste_personnel' vient aussi du chargement Cloud en haut du script
                 choix_nom = st.selectbox("👤 Contrôleur", ["Sélectionner..."] + liste_personnel + ["Autre..."])
                 
-                # Logique pour le nom final sur le rapport
                 if choix_nom == "Autre...":
                     nom_final = st.text_input("1er lettre Prenom + NOM")
                 elif choix_nom != "Sélectionner...":
@@ -356,11 +353,20 @@ elif st.session_state.page == "Ajouter":
                     
             with c2:
                 date_auto = st.date_input("📅 Date", datetime.now())
+
+            # --- TOUT CE QUI SUIT DOIT ÊTRE ALIGNÉ ICI ---
+            st.divider()
+            
+            # Récupération de la config Excel
+            df = st.session_state.df_config
+            
+            # --- 1. SÉLECTION CASCADE (Exemple de la suite) ---
+            if df is not None and not df.empty:
+                liste_ouvrages = [ov for ov in df['Ouvrage'].unique() if ov != "_GENERAL" and ov != ""]
+                # ... la suite de ton code continue ici, toujours avec cet alignement
+                
     else:
         st.warning("⚠️ Aucun chantier trouvé. Configurez-les dans l'onglet Paramètres.")
-            st.divider()
-            # --- 1. SÉLECTION CASCADE ---
-        df = st.session_state.df_config
         
         # On définit une liste vide par défaut pour éviter l'erreur NameError
         liste_ouvrages = [] 
