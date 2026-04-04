@@ -20,6 +20,19 @@ import gspread
 from google.oauth2.service_account import Credentials
 st.set_page_config(page_title="Qualité Exécution VRD", layout="wide")
 
+@st.cache_data(ttl=300)
+def charger_donnees_stock():
+    try:
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+        client = gspread.authorize(creds)
+        spreadsheet = client.open("Suivi_Qualite_BTP")
+        sheet = spreadsheet.worksheet("inventaire_stock")
+        return sheet.get_all_records()
+    except Exception as e:
+        st.error(f"Erreur Cloud : {e}")
+        return []
+
 @st.cache_data(ttl=600)
 def charger_donnees():
     # Lit le fichier Excel déposé sur ton GitHub
@@ -712,103 +725,82 @@ elif st.session_state.page == "archives":
 elif st.session_state.page == "stock":
     st.title("📦 Gestion des Stocks (Cloud)")
 
-    # 1. CONNEXION À GOOGLE SHEETS
+    # Chargement via le cache (Protection 429)
+    data_stock = charger_donnees_stock()
+    df_stock = pd.DataFrame(data_stock) if data_stock else pd.DataFrame(columns=["Chantier", "Categorie", "Article", "Quantite", "Unite"])
+
+    # Accès direct pour les écritures (On ne cache pas l'objet sheet pour l'écriture)
     try:
         scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
         client = gspread.authorize(creds)
-        
-        spreadsheet = client.open("Suivi_Qualite_BTP")
-        # On cible bien le DEUXIÈME onglet
-        sheet_stock = spreadsheet.worksheet("inventaire_stock")
-        
-        # Lecture des données
-        data_stock = sheet_stock.get_all_records()
-        
-        if not data_stock:
-            df_stock = pd.DataFrame(columns=["Chantier", "Categorie", "Article", "Quantite", "Unite"])
-        else:
-            df_stock = pd.DataFrame(data_stock)
-            
-    except Exception as e:
-        st.error(f"Erreur de connexion au Cloud : {e}")
-        st.stop() # On arrête si la connexion échoue
+        sheet_stock = client.open("Suivi_Qualite_BTP").worksheet("inventaire_stock")
+    except:
+        st.error("Impossible de préparer l'écriture Cloud.")
 
-    # 2. SÉLECTION DU CHANTIER
     if liste_chantiers:
         chantier_sel = st.selectbox("📍 Sélectionner le chantier", ["Sélectionner..."] + liste_chantiers)
         
         if chantier_sel != "Sélectionner...":
             st.divider()
             
-            # --- FORMULAIRE D'AJOUT (RESET AUTO) ---
+            # --- FORMULAIRE D'AJOUT ---
             with st.expander("➕ Ajouter un article au stock", expanded=False):
                 with st.form("form_stock_cloud", clear_on_submit=True):
                     c1, c2 = st.columns(2)
-                    cat_val = c1.text_input("Catégorie (ex: Bordure)")
-                    det_val = c2.text_input("Détail (ex: T2)")
-                    
+                    cat_val = c1.text_input("Catégorie (ex: BORDURES)")
+                    det_val = c2.text_input("Détail (ex: T2 Gris)")
                     c3, c4 = st.columns(2)
                     qte_val = c3.number_input("Quantité", min_value=0, value=0)
                     uni_val = c4.selectbox("Unité", ["u", "ml", "m2", "m3", "t"])
                     
                     if st.form_submit_button("🚀 Enregistrer sur le Cloud"):
                         if cat_val and det_val:
-                            # Ajout direct dans Google Sheets
-                            sheet_stock.append_row([chantier_sel, cat_val, det_val, qte_val, uni_val])
+                            # IMPORTANT : On force la catégorie en MAJUSCULES pour éviter les doublons (Bordure vs bordure)
+                            sheet_stock.append_row([chantier_sel, cat_val.strip().upper(), det_val, qte_val, uni_val])
+                            st.cache_data.clear() # On vide le cache pour forcer la relecture
                             st.success(f"✅ {det_val} enregistré !")
-                            time.sleep(1)
                             st.rerun()
-                        else:
-                            st.error("Veuillez remplir tous les champs.")
 
             st.write("### 🔍 Consultation du stock")
 
-            # --- AFFICHAGE PAR CATÉGORIES (ACCORDÉONS) ---
+            # Filtrage pour le chantier actuel
             stock_actuel = df_stock[df_stock["Chantier"] == chantier_sel]
             
             if stock_actuel.empty:
                 st.info("Le stock est vide pour ce chantier.")
             else:
+                # REGROUPEMENT PAR CATÉGORIE
+                # On récupère les catégories uniques (ex: BORDURES, REGARDS)
                 categories = sorted(stock_actuel["Categorie"].unique())
                 
                 for cat in categories:
+                    # On crée UN SEUL expander par catégorie
                     with st.expander(f"📂 {cat.upper()}", expanded=False):
+                        # On filtre les articles appartenant à cette catégorie
                         items_cat = stock_actuel[stock_actuel["Categorie"] == cat]
                         
-                        for idx in items_cat.index:
-                            row = items_cat.loc[idx]
-
-
+                        for idx, row in items_cat.iterrows():
                             with st.container(border=True):
-                                # On ajuste les colonnes : Article (large), Saisie (moyenne), Valider (petite), Poubelle (petite)
                                 col_nom, col_saisie, col_valider, col_poubelle = st.columns([4, 2, 1, 1])
                                 
-                                # 1. Affichage du nom
                                 col_nom.write(f"**{row['Article']}**")
                                 col_nom.caption(f"Actuel : {row['Quantite']} {row['Unite']}")
                                 
-                                # 2. Champ de saisie (pré-rempli avec la valeur actuelle)
                                 nvelle_qte = col_saisie.number_input(
-                                    "Quantité", 
-                                    min_value=0, 
-                                    value=int(row['Quantite']), 
-                                    key=f"input_{idx}",
-                                    label_visibility="collapsed" # Cache le texte "Quantité" pour gagner de la place
+                                    "Qté", min_value=0, value=int(row['Quantite']), 
+                                    key=f"input_{idx}", label_visibility="collapsed"
                                 )
                                 
-                                # Index GSheet = index pandas + 2
+                                # Index GSheet (Index Pandas + 2 car en-tête)
                                 row_gsheet = int(idx) + 2
-                            
-                                # 3. Bouton Valider (Disquette)
-                                if col_valider.button("💾", key=f"save_{idx}", help="Enregistrer la nouvelle quantité"):
+                                
+                                if col_valider.button("💾", key=f"save_{idx}"):
                                     sheet_stock.update_cell(row_gsheet, 4, int(nvelle_qte))
-                                    st.cache_data.clear() # Indispensable pour rafraîchir l'affichage
-                                    st.success("OK")
+                                    st.cache_data.clear()
                                     st.rerun()
-                            
-                                # 4. Bouton Poubelle (Supprimer l'article)
-                                if col_poubelle.button("🗑️", key=f"del_{idx}", help="Supprimer cet article"):
+
+                                if col_poubelle.button("🗑️", key=f"del_{idx}"):
                                     sheet_stock.delete_rows(row_gsheet)
                                     st.cache_data.clear()
                                     st.rerun()
@@ -818,11 +810,11 @@ elif st.session_state.page == "stock":
             if not stock_actuel.empty:
                 if st.button("📄 Générer l'inventaire PDF", use_container_width=True):
                     pdf_bytes = generer_pdf_stock(chantier_sel, stock_actuel)
-                    st.download_button("⬇️ Télécharger le PDF", pdf_bytes, f"Stock_{chantier_sel}.pdf", "application/pdf", use_container_width=True)
+                    st.download_button("⬇️ Télécharger le PDF", pdf_bytes, f"Stock_{chantier_sel}.pdf", "application/pdf")
     else:
         st.warning("Veuillez d'abord configurer vos chantiers dans les Paramètres.")
-        
-                    
+
+
 # 4. Encore ELIF pour les paramètres
 # --- PAGE PARAMÈTRES (VERSION NETTOYÉE ET SÉCURISÉE) ---
 elif st.session_state.page == "parametres":
