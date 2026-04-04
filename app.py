@@ -777,29 +777,39 @@ elif st.session_state.page == "stock":
                         
                         for idx in items_cat.index:
                             row = items_cat.loc[idx]
-                            
-                            with st.container(border=True):
-                                col_nom, col_moins, col_qte, col_plus, col_del = st.columns([3, 1, 2, 1, 0.5])
-                                
-                                col_nom.write(f"**{row['Article']}**")
-                                
-                                # Index GSheet = index pandas + 2 (en-tête + décalage 0/1)
-                                row_gsheet = idx + 2
 
-                                if col_moins.button("➖", key=f"m_{idx}"):
-                                    n_qte = max(0, row["Quantite"] - 1)
-                                    sheet_stock.update_cell(row_gsheet, 4, n_qte)
-                                    st.rerun()
+
+                            with st.container(border=True):
+                                # On ajuste les colonnes : Article (large), Saisie (moyenne), Valider (petite), Poubelle (petite)
+                                col_nom, col_saisie, col_valider, col_poubelle = st.columns([4, 2, 1, 1])
                                 
-                                col_qte.markdown(f"<h4 style='text-align:center; margin:0; color:#2ecc71;'>{row['Quantite']} {row['Unite']}</h4>", unsafe_allow_html=True)
+                                # 1. Affichage du nom
+                                col_nom.write(f"**{row['Article']}**")
+                                col_nom.caption(f"Actuel : {row['Quantite']} {row['Unite']}")
                                 
-                                if col_plus.button("➕", key=f"p_{idx}"):
-                                    n_qte = row["Quantite"] + 1
-                                    sheet_stock.update_cell(row_gsheet, 4, n_qte)
+                                # 2. Champ de saisie (pré-rempli avec la valeur actuelle)
+                                nvelle_qte = col_saisie.number_input(
+                                    "Quantité", 
+                                    min_value=0, 
+                                    value=int(row['Quantite']), 
+                                    key=f"input_{idx}",
+                                    label_visibility="collapsed" # Cache le texte "Quantité" pour gagner de la place
+                                )
+                                
+                                # Index GSheet = index pandas + 2
+                                row_gsheet = int(idx) + 2
+                            
+                                # 3. Bouton Valider (Disquette)
+                                if col_valider.button("💾", key=f"save_{idx}", help="Enregistrer la nouvelle quantité"):
+                                    sheet_stock.update_cell(row_gsheet, 4, int(nvelle_qte))
+                                    st.cache_data.clear() # Indispensable pour rafraîchir l'affichage
+                                    st.success("OK")
                                     st.rerun()
-                                    
-                                if col_del.button("🗑️", key=f"d_{idx}"):
+                            
+                                # 4. Bouton Poubelle (Supprimer l'article)
+                                if col_poubelle.button("🗑️", key=f"del_{idx}", help="Supprimer cet article"):
                                     sheet_stock.delete_rows(row_gsheet)
+                                    st.cache_data.clear()
                                     st.rerun()
 
             # --- EXPORT PDF ---
