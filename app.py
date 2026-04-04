@@ -659,17 +659,13 @@ elif st.session_state.page == "archives":
 
 
 # --- PAGE GESTION DU STOCK ---
-# --- PAGE GESTION DU STOCK (VERSION INTUITIVE) ---
-# --- PAGE GESTION DU STOCK ---
-# --- PAGE GESTION DU STOCK (GROUPÉ PAR CATÉGORIE) ---
-# --- PAGE GESTION DU STOCK (VERSION ÉPURÉE) ---
+# --- PAGE GESTION DU STOCK (CORRECTION DU CRASH) ---
 elif st.session_state.page == "stock":
     st.title("📦 Gestion des Stocks")
     
     file_stock = "data_stock.csv"
     file_ch = "data_chantiers.csv"
 
-    # Initialisation du stock
     if os.path.exists(file_stock):
         df_stock = pd.read_csv(file_stock)
         if "Categorie" not in df_stock.columns:
@@ -684,52 +680,48 @@ elif st.session_state.page == "stock":
         if chantier_sel != "Sélectionner...":
             st.divider()
             
-            # --- FORMULAIRE D'AJOUT AVEC RESET ---
+            # --- FORMULAIRE D'AJOUT ---
+            # On utilise un formulaire Streamlit pour gérer le reset proprement
             with st.expander("➕ Ajouter un article au stock", expanded=False):
-                # Utilisation de clés pour le reset
-                c1, c2, c3 = st.columns([2, 2, 1])
-                cat_input = c1.text_input("Catégorie", placeholder="Ex: Bordure", key="input_cat")
-                det_input = c2.text_input("Détail", placeholder="Ex: T2", key="input_det")
-                
-                c4, c5, _ = st.columns([1, 1, 2])
-                qte_input = c4.number_input("Quantité", min_value=0, value=0, key="input_qte")
-                uni_input = c5.selectbox("Unité", ["u", "ml", "m2", "m3", "t"], key="input_uni")
-                
-                if st.button("🚀 Enregistrer dans le stock", use_container_width=True):
-                    if cat_input and det_input:
-                        nouvelle_ligne = pd.DataFrame([{
-                            "Chantier": chantier_sel,
-                            "Categorie": cat_input,
-                            "Article": det_input,
-                            "Quantite": qte_input,
-                            "Unite": uni_input
-                        }])
-                        df_stock = pd.concat([df_stock, nouvelle_ligne], ignore_index=True)
-                        df_stock.to_csv(file_stock, index=False)
-                        
-                        # --- LE TRUC POUR VIDER LES CHAMPS ---
-                        st.session_state.input_cat = ""
-                        st.session_state.input_det = ""
-                        st.session_state.input_qte = 0
-                        
-                        st.success(f"Enregistré : {cat_input}")
-                        st.rerun()
-                    else:
-                        st.error("Merci de remplir la Catégorie et le Détail.")
+                with st.form("form_ajout_stock", clear_on_submit=True):
+                    c1, c2 = st.columns(2)
+                    cat_val = c1.text_input("Catégorie (ex: Bordure)")
+                    det_val = c2.text_input("Détail (ex: T2)")
+                    
+                    c3, c4 = st.columns(2)
+                    qte_val = c3.number_input("Quantité", min_value=0, value=0)
+                    uni_val = c4.selectbox("Unité", ["u", "ml", "m2", "m3", "t"])
+                    
+                    valider = st.form_submit_button("🚀 Enregistrer dans le stock", use_container_width=True)
+                    
+                    if valider:
+                        if cat_val and det_val:
+                            nouvelle_ligne = pd.DataFrame([{
+                                "Chantier": chantier_sel,
+                                "Categorie": cat_val,
+                                "Article": det_val,
+                                "Quantite": qte_val,
+                                "Unite": uni_val
+                            }])
+                            df_stock = pd.concat([df_stock, nouvelle_ligne], ignore_index=True)
+                            df_stock.to_csv(file_stock, index=False)
+                            st.success(f"✅ {cat_val} ajouté !")
+                            time.sleep(1) # Petit temps pour voir le message
+                            st.rerun()
+                        else:
+                            st.error("Remplissez tous les champs !")
 
             st.write("### 🔍 Consultation du stock")
 
-            # --- AFFICHAGE CONDENSÉ PAR CATÉGORIE ---
+            # --- AFFICHAGE PAR CATÉGORIES (ACCORDÉONS) ---
             stock_actuel = df_stock[df_stock["Chantier"] == chantier_sel]
             
             if stock_actuel.empty:
                 st.info("Le stock est vide.")
             else:
-                # On trie les catégories par ordre alphabétique
                 categories = sorted(stock_actuel["Categorie"].unique())
                 
                 for cat in categories:
-                    # Chaque catégorie est un menu dépliant
                     with st.expander(f"📂 {cat.upper()}", expanded=False):
                         items_cat = stock_actuel[stock_actuel["Categorie"] == cat]
                         
@@ -741,27 +733,31 @@ elif st.session_state.page == "stock":
                                 
                                 col_nom.write(f"**{row['Article']}**")
                                 
+                                # Bouton Moins
                                 if col_moins.button("➖", key=f"m_{idx}"):
                                     df_stock.at[idx, "Quantite"] = max(0, row["Quantite"] - 1)
                                     df_stock.to_csv(file_stock, index=False)
                                     st.rerun()
                                 
+                                # Affichage Quantité
                                 col_qte.markdown(f"<h4 style='text-align:center; margin:0; color:#2ecc71;'>{row['Quantite']} {row['Unite']}</h4>", unsafe_allow_html=True)
                                 
+                                # Bouton Plus
                                 if col_plus.button("➕", key=f"p_{idx}"):
                                     df_stock.at[idx, "Quantite"] = row["Quantite"] + 1
                                     df_stock.to_csv(file_stock, index=False)
                                     st.rerun()
                                     
+                                # Bouton Supprimer
                                 if col_del.button("🗑️", key=f"d_{idx}"):
                                     df_stock = df_stock.drop(idx)
                                     df_stock.to_csv(file_stock, index=False)
                                     st.rerun()
 
-            # --- BOUTON PDF EN BAS ---
+            # --- EXPORT PDF ---
             st.divider()
             if not stock_actuel.empty:
-                if st.button("📄 Générer l'inventaire PDF pour impression", use_container_width=True):
+                if st.button("📄 Générer l'inventaire PDF", use_container_width=True):
                     pdf_bytes = generer_pdf_stock(chantier_sel, stock_actuel)
                     st.download_button(
                         label="⬇️ Télécharger le PDF",
