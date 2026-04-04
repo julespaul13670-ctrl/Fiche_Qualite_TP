@@ -437,8 +437,8 @@ elif st.session_state.page == "Ajouter":
                                     # Questions Ouvrage
                                     for _, row in df_ouv.iterrows():
                                         q_txt = row['Question ou Option']
-                                        key_chk = f"chk_{q_txt}"
-                                        if key_chk in st.session_state:
+                                       key_chk = f"chk_{q_txt}"
+                                         if key_chk in st.session_state:
                                             controles[q_txt] = (st.session_state[key_chk], row['Catégorie Question'])
             
                                     # Questions Générales
@@ -524,22 +524,37 @@ elif st.session_state.page == "Ajouter":
             
                                     # Photo
                                     if photo:
-                                        ext = photo.name.split('.')[-1].lower()
-                                        nom_temp = f"temp_photo_rapport.{ext}"
-                                        with open(nom_temp, "wb") as f:
-                                            f.write(photo.getbuffer())
-                                        pdf.add_page()
-                                        pdf.set_font("Arial", 'B', 12)
-                                        pdf.cell(0, 10, "Photo de l'ouvrage :", 0, 1, 'L')
-                                        pdf.image(nom_temp, x=10, y=30, w=180)
+                                        try:
+                                            # On utilise le nom d'origine pour l'extension
+                                            extension = photo.name.split('.')[-1].lower()
+                                            img_temp = f"img_rapport.{extension}"
+                                            
+                                            # On écrit le fichier physiquement
+                                            with open(img_temp, "wb") as f:
+                                                f.write(photo.getbuffer())
+                                            
+                                            # On ajoute une page dédiée à la fin pour la photo
+                                            pdf.add_page()
+                                            pdf.set_font("Arial", 'B', 12)
+                                            pdf.cell(0, 10, "PHOTO DU CONTROLE :", 0, 1, 'L')
+                                            pdf.ln(5)
+                                            
+                                            # On insère l'image
+                                            pdf.image(img_temp, x=15, y=35, w=180)
+                                        except Exception as e_img:
+                                            st.error(f"Erreur photo : {e_img}")
 
-                                    # Finalisation
+                                    # --- FINALISATION ---
                                     pdf_data = pdf.output(dest='S')
-                                    st.session_state.pdf_bytes = bytes(pdf_data) if not isinstance(pdf_data, str) else pdf_data.encode('latin-1')
+                                    # On s'assure que ce sont des bytes
+                                    if isinstance(pdf_data, str):
+                                        st.session_state.pdf_bytes = pdf_data.encode('latin-1')
+                                    else:
+                                        st.session_state.pdf_bytes = bytes(pdf_data)
+                                        
                                     st.session_state.nom_fichier = f"Rapport_{code_fiche}_{chantier}.pdf"
-                                    
                                     st.success(f"✅ Aperçu prêt ! ({code_fiche})")
-                                    st.rerun() # On relance pour figer l'affichage du PDF
+                                    st.rerun()
 
                                 except Exception as e:
                                     st.error(f"Erreur technique : {e}")
