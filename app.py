@@ -784,10 +784,24 @@ elif st.session_state.page == "stock":
                     
                     if st.form_submit_button("🚀 Enregistrer sur le Cloud"):
                         if cat_val and det_val:
-                            sheet_stock.append_row([chantier_sel, cat_val, det_val, qte_val, uni_val])
-                            st.cache_data.clear() 
-                            st.success(f"✅ {det_val} enregistré !")
-                            st.rerun()
+                            with st.spinner("Connexion au Cloud..."):
+                                # ON APPELLE LA CONNEXION UNIQUEMENT ICI
+                                sh_ecriture = obtenir_onglet_ecriture("inventaire_stock")
+                                
+                                if sh_ecriture:
+                                    # Ajout de la ligne avec la variable locale sh_ecriture
+                                    sh_ecriture.append_row([chantier_sel, cat_val.strip().upper(), det_val, qte_val, uni_val])
+                                    
+                                    # On vide le cache pour que le nouvel article apparaisse dans la liste
+                                    st.cache_data.clear() 
+                                    
+                                    st.success(f"✅ {det_val} enregistré !")
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("Impossible de joindre Google Sheets. Réessayez.")
+                        else:
+                            st.error("Veuillez remplir tous les champs.")
 
             st.write("### 🔍 Consultation du stock")
 
